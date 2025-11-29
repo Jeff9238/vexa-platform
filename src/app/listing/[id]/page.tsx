@@ -1,11 +1,10 @@
-import { prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma"; // FIXED IMPORT
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
 import { ArrowLeft, MapPin, BedDouble, Car, CheckCircle, Share2, MessageCircle, Phone, ImageIcon } from "lucide-react";
 
-// Fonts
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
@@ -23,11 +22,9 @@ export default async function ListingPage({
 
   if (!listing) notFound();
 
-  // --- IMAGE LOGIC ---
-  // Split the comma-separated string into an array of URLs
   const allImages = listing.images ? listing.images.split(',') : [];
   const heroImage = allImages[0] || 'https://via.placeholder.com/800';
-  const galleryImages = allImages.slice(1); // All images except the first one
+  const galleryImages = allImages.slice(1); 
 
   const whatsappMessage = `Hi ${listing.user.name}, I am interested in your listing on VEXA: ${listing.title} (RM ${listing.price})`;
   const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
@@ -47,7 +44,7 @@ export default async function ListingPage({
         </div>
       </nav>
 
-      {/* --- HERO IMAGE SECTION --- */}
+      {/* --- HERO IMAGE --- */}
       <div className="relative w-full h-[50vh] md:h-[65vh] bg-neutral-900 group">
          <Image 
             src={heroImage} 
@@ -57,7 +54,6 @@ export default async function ListingPage({
             priority
          />
          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"></div>
-         
          <div className="absolute bottom-0 left-0 w-full p-6 md:p-12">
             <div className="max-w-7xl mx-auto">
                 <span className="inline-block px-3 py-1 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-sm mb-4">
@@ -74,13 +70,9 @@ export default async function ListingPage({
          </div>
       </div>
 
-      {/* --- CONTENT GRID --- */}
+      {/* --- CONTENT --- */}
       <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-3 gap-12">
-        
-        {/* LEFT: Gallery & Details */}
         <div className="lg:col-span-2 space-y-12">
-            
-            {/* 1. GALLERY GRID (New!) */}
             {galleryImages.length > 0 && (
                 <div>
                     <h3 className="text-sm font-bold mb-4 text-gray-500 uppercase tracking-widest flex items-center gap-2">
@@ -95,8 +87,7 @@ export default async function ListingPage({
                     </div>
                 </div>
             )}
-
-            {/* 2. Price & Stats */}
+            
             <div className="flex flex-wrap items-center justify-between gap-6 border-b border-white/10 pb-8">
                 <div>
                     <p className="text-sm text-gray-400 uppercase tracking-widest mb-1">Asking Price</p>
@@ -131,7 +122,6 @@ export default async function ListingPage({
                 </div>
             </div>
 
-            {/* 3. Description */}
             <div>
                 <h3 className="text-xl font-bold mb-4 text-gray-200">Description</h3>
                 <p className="text-gray-400 leading-relaxed whitespace-pre-line text-lg">
@@ -139,7 +129,6 @@ export default async function ListingPage({
                 </p>
             </div>
 
-            {/* 4. AI Tags */}
             <div>
                 <h3 className="text-sm font-bold mb-4 text-gray-500 uppercase tracking-widest">Features</h3>
                 <div className="flex flex-wrap gap-3">
@@ -152,7 +141,6 @@ export default async function ListingPage({
             </div>
         </div>
 
-        {/* RIGHT: Agent Card (Sticky) */}
         <div className="lg:col-span-1">
             <div className="sticky top-24 bg-white text-black rounded-2xl p-6 shadow-2xl">
                 <div className="flex items-center gap-4 mb-6">
@@ -167,7 +155,6 @@ export default async function ListingPage({
                         </p>
                     </div>
                 </div>
-
                 <div className="space-y-3">
                     <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl transition-all">
                         <MessageCircle size={20}/> WhatsApp
@@ -176,7 +163,6 @@ export default async function ListingPage({
                         <Phone size={20}/> Call Agent
                     </button>
                 </div>
-
                 <p className="text-xs text-center text-gray-400 mt-6">
                     Reference ID: {listing.id.substring(0,8)} <br/>
                     Posted on VEXA Marketplace
@@ -185,7 +171,6 @@ export default async function ListingPage({
         </div>
 
       </div>
-
     </main>
   );
 }

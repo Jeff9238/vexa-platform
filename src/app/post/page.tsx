@@ -108,8 +108,7 @@ export default function PostAd() {
       submitData.append('imageUrl', finalImageString);
       
       // --- IMPORTANT: YOUR USER ID GOES HERE ---
-      submitData.append('userId', '88e84ca3-8e34-46a8-9b68-88e9ffc2e438'); 
-
+    
       await createListing(submitData);
 
       // C. SUCCESS! Redirect Client-Side

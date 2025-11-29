@@ -2,7 +2,7 @@ import Image from "next/image";
 import Link from "next/link"; 
 import { Playfair_Display, Manrope } from 'next/font/google';
 import { Search, Menu, BedDouble, Car, MessageCircle, ArrowRight } from "lucide-react"; 
-import { prisma } from "@/lib/prisma"; 
+import { prisma } from "@/lib/prisma"; // FIXED IMPORT
 
 // 1. Setup Premium Fonts
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
@@ -129,13 +129,12 @@ export default async function Home() {
   );
 }
 
-// --- REUSABLE CARD COMPONENT (NOW WITH LINKS!) ---
+// --- REUSABLE CARD COMPONENT ---
 function ListingCard({ item, icon }: { item: any, icon: any }) {
     const priceDisplay = item.price > 0 
         ? `RM ${item.price.toLocaleString()}` 
         : "Contact for Price";
 
-    // FIX: The entire card is now wrapped in a Link
     return (
         <Link href={`/listing/${item.id}`} className="block h-full group">
             <div className="bg-neutral-900 border border-white/5 rounded-xl overflow-hidden hover:border-blue-500/30 transition-all duration-300 hover:shadow-2xl hover:shadow-blue-900/10 flex flex-col h-full">
