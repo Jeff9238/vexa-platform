@@ -1,22 +1,19 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* 1. Ignore Strict Checks (Crucial for Vercel) */
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  /* 1. TypeScript Errors: Keep ignoring these for smoother deployment */
   typescript: {
     ignoreBuildErrors: true,
   },
 
-  /* 2. Allow Large AI Uploads */
+  /* 2. AI & Uploads: Allow large files (10MB) for Gemini */
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',
     },
   },
 
-  /* 3. Image Domains */
+  /* 3. Image Hosting: Whitelist Unsplash and Your Supabase */
   images: {
     remotePatterns: [
       {
@@ -27,7 +24,7 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'xeghmiksvzblxaczkpel.supabase.co',
+        hostname: 'xeghmiksvzblxaczkpel.supabase.co', // Your Supabase Project
         port: '',
         pathname: '/**',
       },
@@ -36,4 +33,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-// Vercel deployment fix
