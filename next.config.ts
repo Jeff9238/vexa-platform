@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
-// We remove the explicit type check here to stop VS Code complaints
-const nextConfig = {
-  /* 1. Ignore Strict Checks for Deployment */
+const nextConfig: NextConfig = {
+  /* 1. Ignore Strict Checks (Crucial for Vercel) */
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -10,14 +9,14 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
 
-  /* 2. Allow large uploads (10MB) for Gemini */
+  /* 2. Allow Large AI Uploads */
   experimental: {
     serverActions: {
       bodySizeLimit: '10mb',
     },
   },
 
-  /* 3. Allow images from Supabase */
+  /* 3. Image Domains */
   images: {
     remotePatterns: [
       {
@@ -28,7 +27,7 @@ const nextConfig = {
       },
       {
         protocol: 'https',
-        hostname: 'xeghmiksvzblxaczkpel.supabase.co', // Your Supabase
+        hostname: 'xeghmiksvzblxaczkpel.supabase.co',
         port: '',
         pathname: '/**',
       },
@@ -37,3 +36,4 @@ const nextConfig = {
 };
 
 export default nextConfig;
+// Vercel deployment fix
