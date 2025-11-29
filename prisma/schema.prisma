@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// 1. THE USER (Agents & Buyers)
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String?
+  role      String   @default("USER") // AGENT or USER
+  credits   Int      @default(0)      // For posting ads
+  createdAt DateTime @default(now())
+  
+  listings  Listing[]
+}
+
+// 2. THE LISTING
+model Listing {
+  id          String   @id @default(uuid())
+  title       String
+  description String
+  price       Float
+  type        String   // "PROPERTY" or "VEHICLE"
+  tags        String   // AI Tags
+  images      String   // URL from Supabase Storage
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+}
