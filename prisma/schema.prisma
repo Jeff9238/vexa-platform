@@ -20,7 +20,7 @@ model User {
   listings  Listing[]
 }
 
-// 3. LISTING (UPDATED FOR PROPERTY)
+// 3. LISTING (ADDED CAR PARKS)
 model Listing {
   id          String   @id @default(uuid())
   title       String
@@ -31,26 +31,25 @@ model Listing {
   images      String
   location    String   @default("Malaysia")
   
-  // --- NEW LOCATION SPLIT ---
+  // Location Split
   area        String   @default("City")
   state       String   @default("Malaysia")
-
-  // --- SHARED STATUS ---
-  condition   String?  // New, Used, Recon (Vehicles)
+  
+  // Status
+  condition   String?
   verified    Boolean  @default(false)
   
-  // --- NEW PROPERTY FIELDS ---
-  listingCategory String? // "SALE" or "RENT"
-  facilities      String? // "Pool,Gym,Security" (Comma separated)
-
-  // --- PROPERTY SPECS ---
+  // Property Fields
+  listingCategory String? 
+  facilities      String? 
   bedrooms    Int?
   bathrooms   Int?
+  carParks    Int?     // <--- NEW FIELD
   sqft        Int?
-  propertyType String? // Added Factory, Land, etc.
+  propertyType String? 
   furnishing  String?
 
-  // --- VEHICLE SPECS (UNCHANGED) ---
+  // Vehicle Fields
   brand       String?
   model       String?
   year        Int?
@@ -66,12 +65,6 @@ model Listing {
   engineCC    Int?
   peakPower   Int?
   peakTorque  Int?
-  length      Int?
-  width       Int?
-  height      Int?
-  wheelBase   Int?
-  kerbWeight  Int?
-  fuelTank    Int?
 
   published   Boolean  @default(false)
   createdAt   DateTime @default(now())

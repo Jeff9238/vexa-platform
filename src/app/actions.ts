@@ -25,17 +25,60 @@ async function getAuthenticatedUser() {
   return dbUser;
 }
 
-// --- ACTION A: ANALYZE IMAGE ---
+// --- ACTION A: ANALYZE IMAGE (SUPER SMART MODE) ---
 export async function analyzeImage(imageBase64: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const prompt = `Analyze this image. If Vehicle: return brand, model, year. If Property: return type, style. Return JSON only.`;
     
-    const result = await model.generateContent([prompt, { inlineData: { data: imageBase64.split(',')[1], mimeType: "image/jpeg" } }]);
-    const text = result.response.text().replace(/```json|```/g, '').trim();
-    return JSON.parse(text);
+    // UPDATED PROMPT: EXTRACTS ALL SPECIFIC FIELDS
+    const prompt = `
+      Analyze this image deeply. Is it a Property or a Vehicle?
+      
+      1. IF PROPERTY:
+      Return JSON with:
+      - type: "PROPERTY"
+      - title: (Catchy title, e.g. "Modern 3-Storey Bungalow")
+      - description: (Luxury description)
+      - propertyType: (Guess one: Condo, Terrace, Bungalow, Semi-D, Factory, Shop)
+      - bedrooms: (Estimate number, e.g. 4)
+      - bathrooms: (Estimate number, e.g. 3)
+      - carParks: (Estimate garage size, e.g. 2)
+      - furnishing: (Guess: Fully Furnished, Partly Furnished, Unfurnished)
+      - tags: (comma separated)
+
+      2. IF VEHICLE:
+      Return JSON with:
+      - type: "VEHICLE"
+      - title: (Year + Brand + Model + Variant, e.g. "2023 Toyota Alphard 2.5 Z")
+      - description: (Sales description highlighting features)
+      - brand: (e.g. Toyota, Honda, BMW)
+      - model: (e.g. Alphard, Civic, X5)
+      - variant: (e.g. 2.5 Z, M Sport)
+      - year: (Estimate year, e.g. 2023)
+      - color: (Visual color)
+      - bodyType: (Sedan, SUV, MPV, Coupe, 4x4)
+      - fuelType: (Petrol, Diesel, Hybrid, EV)
+      - transmission: (Automatic or Manual)
+      - origin: (Guess: Japan, UK, Local)
+      - seats: (Estimate seats, e.g. 5 or 7)
+      - engineCC: (Estimate CC, e.g. 2500)
+      - tags: (comma separated)
+
+      Return ONLY valid JSON.
+    `;
+
+    const base64Data = imageBase64.split(',')[1] || imageBase64;
+    const result = await model.generateContent([
+      prompt,
+      { inlineData: { data: base64Data, mimeType: "image/jpeg" } },
+    ]);
+
+    const response = await result.response;
+    const cleanText = response.text().replace(/```json|```/g, '').trim();
+    return JSON.parse(cleanText);
+
   } catch (error) {
-    console.error("AI Failed:", error);
+    console.error("Gemini AI Failed:", error);
     return null;
   }
 }
@@ -49,7 +92,6 @@ export async function createListing(formData: FormData) {
     return val ? parseInt(val as string) : null;
   };
 
-  // Safe defaults for location
   const area = formData.get('area') as string || "City";
   const state = formData.get('state') as string || "Malaysia";
 
@@ -57,24 +99,24 @@ export async function createListing(formData: FormData) {
     title: formData.get('title') as string,
     description: formData.get('description') as string,
     price: parseFloat(formData.get('price') as string) || 0,
-    area, state, location: `${area}, ${state}`, // Combine for backup
+    area, state, location: `${area}, ${state}`,
     type: formData.get('type') as string,
     tags: formData.get('tags') as string,
     images: formData.get('imageUrl') as string,
     condition: formData.get('condition') as string,
     
-    // NEW PROPERTY FIELDS
-    listingCategory: formData.get('listingCategory') as string, // SALE or RENT
-    facilities: formData.get('facilities') as string, // "Pool,Gym"
+    listingCategory: formData.get('listingCategory') as string,
+    facilities: formData.get('facilities') as string,
 
     // Property Specs
     bedrooms: getInt('bedrooms'),
     bathrooms: getInt('bathrooms'),
+    carParks: getInt('carParks'),
     sqft: getInt('sqft'),
     propertyType: formData.get('propertyType') as string,
     furnishing: formData.get('furnishing') as string,
 
-    // Vehicle Core
+    // Vehicle Specs
     brand: formData.get('brand') as string,
     model: formData.get('model') as string,
     variant: formData.get('variant') as string,
@@ -87,17 +129,9 @@ export async function createListing(formData: FormData) {
     year: getInt('year'),
     mileage: getInt('mileage'),
     seats: getInt('seats'),
-
-    // Vehicle Tech
     engineCC: getInt('engineCC'),
     peakPower: getInt('peakPower'),
     peakTorque: getInt('peakTorque'),
-    length: getInt('length'),
-    width: getInt('width'),
-    height: getInt('height'),
-    wheelBase: getInt('wheelBase'),
-    kerbWeight: getInt('kerbWeight'),
-    fuelTank: getInt('fuelTank'),
 
     published: true,
     user: { connect: { id: user.id } }
@@ -130,15 +164,67 @@ export async function getListing(id: string) {
 
 // --- ACTION E: UPDATE LISTING ---
 export async function updateListing(formData: FormData) {
+  const user = await getAuthenticatedUser(); // Security check
   const id = formData.get('id') as string;
-  // (Simplified update logic for now)
+
+  // Helper for numbers
+  const getInt = (key: string) => {
+    const val = formData.get(key);
+    return val ? parseInt(val as string) : null;
+  };
+
+  const area = formData.get('area') as string;
+  const state = formData.get('state') as string;
+  const imageUrl = formData.get('imageUrl') as string; // <--- NEW: Capture Images
+
   const data = {
     title: formData.get('title') as string,
     description: formData.get('description') as string,
     price: parseFloat(formData.get('price') as string) || 0,
+    
+    // Update Images & Location
+    images: imageUrl, 
+    area,
+    state,
+    location: `${area}, ${state}`,
+
+    type: formData.get('type') as string,
+    tags: formData.get('tags') as string,
+    condition: formData.get('condition') as string,
+    
+    // Property Fields
+    listingCategory: formData.get('listingCategory') as string,
+    facilities: formData.get('facilities') as string,
+    bedrooms: getInt('bedrooms'),
+    bathrooms: getInt('bathrooms'),
+    carParks: getInt('carParks'),
+    sqft: getInt('sqft'),
+    propertyType: formData.get('propertyType') as string,
+    furnishing: formData.get('furnishing') as string,
+
+    // Vehicle Fields
+    brand: formData.get('brand') as string,
+    model: formData.get('model') as string,
+    variant: formData.get('variant') as string,
+    series: formData.get('series') as string,
+    color: formData.get('color') as string,
+    origin: formData.get('origin') as string,
+    bodyType: formData.get('bodyType') as string,
+    transmission: formData.get('transmission') as string,
+    fuelType: formData.get('fuelType') as string,
+    year: getInt('year'),
+    mileage: getInt('mileage'),
+    seats: getInt('seats'),
+    engineCC: getInt('engineCC'),
+    peakPower: getInt('peakPower'),
+    peakTorque: getInt('peakTorque'),
   };
+
   await prisma.listing.update({ where: { id }, data });
+  
   revalidatePath('/');
+  revalidatePath('/dashboard');
   revalidatePath(`/listing/${id}`);
+  
   return { success: true };
 }

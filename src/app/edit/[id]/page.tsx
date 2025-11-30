@@ -3,160 +3,308 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { getListing, updateListing } from '@/app/actions';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Check, Upload, X, Star } from 'lucide-react';
 import Link from 'next/link';
+import { createClient } from '@supabase/supabase-js';
+import Image from 'next/image';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
+const PROPERTY_TYPES = ["Terrace", "Condo", "Bungalow", "Semi-D", "Apartment", "Townhouse", "Shoplot", "Office", "Factory", "Warehouse", "Land", "Hotel"];
+const FACILITIES_LIST = ["Swimming Pool", "Gymnasium", "24H Security", "Parking", "Elevator", "Playground", "Balcony", "Aircon", "Wifi", "Kitchen Cabinet", "Near MRT/LRT", "Garden"];
+
+// Helper Type for Image Management
+type ImageItem = {
+    id: string;
+    url: string;
+    file?: File; // Only new images have this
+};
 
 export default function EditPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
-  
-  // Unwrap params using React.use()
   const resolvedParams = use(params);
   const id = resolvedParams.id;
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   
+  // NEW: Image State
+  const [gallery, setGallery] = useState<ImageItem[]>([]);
+
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    price: '',
-    location: '',
-    type: 'PROPERTY',
-    tags: '',
+    title: '', description: '', price: '', 
+    area: '', state: '', 
+    type: 'PROPERTY', tags: '', condition: '',
+    listingCategory: '',
+    
+    // Property
+    propertyType: '', bedrooms: '', bathrooms: '', carParks: '', sqft: '', furnishing: '',
+    
+    // Vehicle
+    brand: '', model: '', variant: '', series: '', year: '', mileage: '', 
+    color: '', origin: '', bodyType: '', transmission: '', fuelType: '', seats: '',
+    engineCC: '', peakPower: '', peakTorque: ''
   });
 
-  // 1. Fetch Data on Load
+  // 1. Load Data
   useEffect(() => {
-    getListing(id).then((data) => {
+    getListing(id).then((data: any) => {
       if (data) {
         setFormData({
-          title: data.title,
-          description: data.description,
-          price: data.price.toString(),
-          location: data.location,
-          type: data.type,
-          tags: data.tags,
+          title: data.title || '',
+          description: data.description || '',
+          price: data.price?.toString() || '',
+          area: data.area || '',
+          state: data.state || '',
+          type: data.type || 'PROPERTY',
+          tags: data.tags || '',
+          condition: data.condition || '',
+          listingCategory: data.listingCategory || '',
+          
+          propertyType: data.propertyType || '',
+          bedrooms: data.bedrooms?.toString() || '',
+          bathrooms: data.bathrooms?.toString() || '',
+          carParks: data.carParks?.toString() || '',
+          sqft: data.sqft?.toString() || '',
+          furnishing: data.furnishing || '',
+
+          brand: data.brand || '',
+          model: data.model || '',
+          variant: data.variant || '',
+          series: data.series || '',
+          year: data.year?.toString() || '',
+          mileage: data.mileage?.toString() || '',
+          color: data.color || '',
+          origin: data.origin || '',
+          bodyType: data.bodyType || '',
+          transmission: data.transmission || '',
+          fuelType: data.fuelType || '',
+          seats: data.seats?.toString() || '',
+          engineCC: data.engineCC?.toString() || '',
+          peakPower: data.peakPower?.toString() || '',
+          peakTorque: data.peakTorque?.toString() || ''
         });
+
+        if (data.facilities) {
+            setSelectedFacilities(data.facilities.split(','));
+        }
+
+        // Load existing images
+        if (data.images) {
+            const urls = data.images.split(',');
+            const initialGallery = urls.map((url: string) => ({
+                id: Math.random().toString(36),
+                url: url
+            }));
+            setGallery(initialGallery);
+        }
       }
       setLoading(false);
     });
   }, [id]);
 
-  // 2. Handle Update
+  // --- IMAGE HANDLERS ---
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const newFiles = Array.from(e.target.files);
+    
+    const newItems: ImageItem[] = newFiles.map(file => ({
+        id: Math.random().toString(36),
+        url: URL.createObjectURL(file),
+        file: file // Mark as new file needing upload
+    }));
+
+    setGallery(prev => [...prev, ...newItems].slice(0, 8));
+  };
+
+  const removeImage = (id: string) => {
+    setGallery(prev => prev.filter(item => item.id !== id));
+  };
+
+  const setAsCover = (index: number) => {
+    if (index === 0) return;
+    const newGallery = [...gallery];
+    const [selected] = newGallery.splice(index, 1);
+    newGallery.unshift(selected);
+    setGallery(newGallery);
+  };
+
+  const handleChange = (e: any) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const toggleFacility = (facility: string) => {
+    if (selectedFacilities.includes(facility)) {
+      setSelectedFacilities(prev => prev.filter(f => f !== facility));
+    } else {
+      setSelectedFacilities(prev => [...prev, facility]);
+    }
+  };
+
+  // --- SAVE HANDLER ---
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (gallery.length === 0) return alert("Please keep at least one photo.");
     setSaving(true);
 
-    const submitData = new FormData();
-    submitData.append('id', id);
-    submitData.append('title', formData.title);
-    submitData.append('description', formData.description);
-    submitData.append('price', formData.price);
-    submitData.append('location', formData.location);
-    submitData.append('type', formData.type);
-    submitData.append('tags', formData.tags);
+    try {
+        // 1. Process Images: Upload new ones, Keep old ones
+        const finalImageUrls: string[] = [];
 
-    await updateListing(submitData);
-    
-    alert("Updated Successfully!");
-    router.push('/dashboard');
-    router.refresh();
+        for (const item of gallery) {
+            if (item.file) {
+                // This is a new file, upload it
+                const name = `${Date.now()}-${Math.random().toString(36).substring(7)}-${item.file.name}`;
+                const { error } = await supabase.storage.from('vexa-images').upload(name, item.file);
+                if (error) throw error;
+                const { data } = supabase.storage.from('vexa-images').getPublicUrl(name);
+                finalImageUrls.push(data.publicUrl);
+            } else {
+                // This is an old URL, just keep it
+                finalImageUrls.push(item.url);
+            }
+        }
+
+        // 2. Submit Data
+        const submitData = new FormData();
+        submitData.append('id', id);
+        Object.entries(formData).forEach(([key, value]) => {
+            submitData.append(key, value);
+        });
+        submitData.append('facilities', selectedFacilities.join(','));
+        submitData.append('imageUrl', finalImageUrls.join(',')); // New Combined Image List
+
+        await updateListing(submitData);
+        alert("Updated Successfully!");
+        router.push('/dashboard');
+        router.refresh();
+
+    } catch (err) {
+        console.error(err);
+        alert("Error saving changes.");
+    } finally {
+        setSaving(false);
+    }
   };
 
   if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 flex justify-center items-center font-sans">
-      <div className="max-w-3xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
+      <div className="max-w-4xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
         
         <div className="flex items-center gap-4 mb-8">
            <Link href="/dashboard" className="p-2 bg-white/5 rounded-full hover:bg-white/10"><ArrowLeft size={20}/></Link>
            <h1 className="text-3xl font-bold">Edit Listing</h1>
+           <span className="text-xs bg-blue-900 text-blue-200 px-3 py-1 rounded uppercase font-bold tracking-wider">{formData.type}</span>
         </div>
 
-        <form onSubmit={handleUpdate} className="space-y-6">
-          
-          {/* Note: We hide image editing for now to keep it safe/simple */}
-          <div className="p-4 bg-blue-900/20 border border-blue-500/30 rounded-xl text-blue-200 text-sm mb-6">
-             Editing text details. To change images, please delete and repost.
+        <form onSubmit={handleUpdate} className="space-y-8">
+
+          {/* --- IMAGE MANAGER --- */}
+          <div className="grid grid-cols-4 gap-4">
+            {gallery.length < 8 && (
+                <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer">
+                    <input type="file" multiple onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                    <Upload className="text-blue-500" />
+                </div>
+            )}
+            
+            {gallery.map((item, idx) => (
+                <div key={item.id} className={`relative aspect-square bg-neutral-800 rounded-xl overflow-hidden border group transition-all ${idx === 0 ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/10'}`}>
+                    <Image src={item.url} alt="Preview" fill className="object-cover" />
+                    
+                    <button type="button" onClick={() => removeImage(item.id)} className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-20">
+                        <X size={12} />
+                    </button>
+
+                    {idx !== 0 && (<button type="button" onClick={() => setAsCover(idx)} className="absolute top-1 left-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-yellow-500 z-20" title="Set as Cover"><Star size={12} /></button>)}
+                    
+                    {idx === 0 && (<div className="absolute bottom-0 inset-x-0 bg-blue-600 text-[10px] text-center py-1 font-bold tracking-widest z-10">COVER</div>)}
+                </div>
+            ))}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="md:col-span-2">
-               <label className="text-xs text-neutral-500 uppercase font-bold ml-1 mb-1 block">Title</label>
-               <input 
-                 type="text" 
-                 value={formData.title} 
-                 onChange={(e) => setFormData({...formData, title: e.target.value})}
-                 className="w-full bg-neutral-950 border border-neutral-800 p-4 rounded-xl focus:border-blue-500 outline-none transition-colors font-semibold"
-               />
-             </div>
+          {/* BASIC INFO */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 border-b border-white/5 pb-8">
+             <div className="col-span-2"><label className="label">Title</label><input name="title" value={formData.title} onChange={handleChange} className="input font-bold" /></div>
+             <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400 font-bold" /></div>
+             
+             <div><label className="label">State</label><select name="state" value={formData.state} onChange={handleChange} className="input">{MALAYSIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+             <div><label className="label">Area</label><input name="area" value={formData.area} onChange={handleChange} className="input" /></div>
 
-             <div>
-               <label className="text-xs text-neutral-500 uppercase font-bold ml-1 mb-1 block">Location</label>
-               <input 
-                 type="text" 
-                 value={formData.location} 
-                 onChange={(e) => setFormData({...formData, location: e.target.value})}
-                 className="w-full bg-neutral-950 border border-neutral-800 p-4 rounded-xl focus:border-blue-500 outline-none transition-colors"
-               />
-             </div>
+             {formData.type === 'PROPERTY' && (
+                 <div><label className="label">Category</label><select name="listingCategory" value={formData.listingCategory} onChange={handleChange} className="input"><option>SALE</option><option>RENT</option></select></div>
+             )}
+             {formData.type === 'VEHICLE' && (
+                 <div><label className="label">Condition</label><select name="condition" value={formData.condition} onChange={handleChange} className="input"><option>Recon</option><option>Used</option><option>New</option></select></div>
+             )}
 
-             <div>
-               <label className="text-xs text-neutral-500 uppercase font-bold ml-1 mb-1 block">Price (RM)</label>
-               <input 
-                 type="number" 
-                 value={formData.price} 
-                 onChange={(e) => setFormData({...formData, price: e.target.value})}
-                 className="w-full bg-neutral-950 border border-neutral-800 p-4 rounded-xl focus:border-blue-500 outline-none transition-colors font-bold text-green-400"
-               />
-             </div>
+             <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32" /></div>
           </div>
 
-          <div>
-             <label className="text-xs text-neutral-500 uppercase font-bold ml-1 mb-1 block">Description</label>
-             <textarea 
-               rows={6}
-               value={formData.description} 
-               onChange={(e) => setFormData({...formData, description: e.target.value})}
-               className="w-full bg-neutral-950 border border-neutral-800 p-4 rounded-xl focus:border-blue-500 outline-none transition-colors text-neutral-300 leading-relaxed"
-             />
-          </div>
+          {/* PROPERTY SPECIFIC */}
+          {formData.type === 'PROPERTY' && (
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label className="label">Type</label><select name="propertyType" value={formData.propertyType} onChange={handleChange} className="input">{PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                    <div><label className="label">Bedrooms</label><input name="bedrooms" type="number" value={formData.bedrooms} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Bathrooms</label><input name="bathrooms" type="number" value={formData.bathrooms} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Car Parks</label><input name="carParks" type="number" value={formData.carParks} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Size (Sq.ft)</label><input name="sqft" type="number" value={formData.sqft} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Furnishing</label><select name="furnishing" value={formData.furnishing} onChange={handleChange} className="input"><option>Fully Furnished</option><option>Partly Furnished</option><option>Unfurnished</option></select></div>
+                </div>
+                
+                <div>
+                    <h3 className="text-blue-500 text-xs font-bold uppercase tracking-widest mb-4">Facilities</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {FACILITIES_LIST.map((facility) => (
+                            <button type="button" key={facility} onClick={() => toggleFacility(facility)} className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${selectedFacilities.includes(facility) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-gray-400 hover:bg-neutral-700'}`}>{selectedFacilities.includes(facility) ? <Check size={14} className="inline mr-2"/> : null}{facility}</button>
+                        ))}
+                    </div>
+                </div>
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-neutral-500 uppercase font-bold ml-1 mb-1 block">Type</label>
-                <select 
-                  value={formData.type}
-                  onChange={(e) => setFormData({...formData, type: e.target.value})}
-                  className="w-full bg-neutral-950 border border-neutral-800 p-4 rounded-xl outline-none"
-                >
-                  <option value="PROPERTY">Property</option>
-                  <option value="VEHICLE">Vehicle</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-neutral-500 uppercase font-bold ml-1 mb-1 block">Tags</label>
-                <input 
-                  type="text" 
-                  value={formData.tags}
-                  onChange={(e) => setFormData({...formData, tags: e.target.value})}
-                  className="w-full bg-neutral-950 border border-neutral-800 p-4 rounded-xl outline-none text-blue-400 text-sm"
-                />
-              </div>
-          </div>
+          {/* VEHICLE SPECIFIC */}
+          {formData.type === 'VEHICLE' && (
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label className="label">Brand</label><input name="brand" value={formData.brand} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Model</label><input name="model" value={formData.model} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Variant</label><input name="variant" value={formData.variant} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Year</label><input type="number" name="year" value={formData.year} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Mileage</label><input type="number" name="mileage" value={formData.mileage} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Color</label><input name="color" value={formData.color} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Origin</label><select name="origin" value={formData.origin} onChange={handleChange} className="input"><option>Local</option><option>Japan</option><option>Others</option></select></div>
+                    <div><label className="label">Body</label><select name="bodyType" value={formData.bodyType} onChange={handleChange} className="input"><option>Sedan</option><option>SUV</option><option>MPV</option><option>4x4</option><option>Coupe</option><option>Others</option></select></div>
+                    <div><label className="label">Trans.</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option><option>CVT</option></select></div>
+                    <div><label className="label">Fuel</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option><option>EV</option></select></div>
+                    <div><label className="label">Engine CC</label><input type="number" name="engineCC" value={formData.engineCC} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Power</label><input type="number" name="peakPower" value={formData.peakPower} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Torque</label><input type="number" name="peakTorque" value={formData.peakTorque} onChange={handleChange} className="input"/></div>
+                </div>
+            </div>
+          )}
 
-          <button 
-            type="submit" 
-            disabled={saving}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-5 rounded-2xl transition-all flex items-center justify-center gap-2 mt-4"
-          >
+          <button type="submit" disabled={saving} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl mt-4 flex items-center justify-center gap-2">
             {saving ? <Loader2 className="animate-spin"/> : <Save />}
-            {saving ? "Updating..." : "Save Changes"}
+            {saving ? "Saving..." : "Save Changes"}
           </button>
 
         </form>
       </div>
+      <style jsx>{`
+        .label { display: block; font-size: 0.7rem; color: #6b7280; font-weight: bold; text-transform: uppercase; margin-bottom: 0.25rem; }
+        .input { width: 100%; background: #171717; border: 1px solid #262626; padding: 0.75rem; border-radius: 0.75rem; color: white; outline: none; transition: 0.2s; }
+        .input:focus { border-color: #2563eb; }
+      `}</style>
     </div>
   );
 }

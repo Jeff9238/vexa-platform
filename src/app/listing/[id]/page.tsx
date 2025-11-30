@@ -3,7 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare } from "lucide-react";
+import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront } from "lucide-react";
+import ImageGallery from "@/components/ImageGallery"; 
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
@@ -14,45 +15,46 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
   if (!listing) notFound();
 
   const images = listing.images ? listing.images.split(',') : [];
+  const heroImage = images[0] || 'https://via.placeholder.com/800';
+  
   const whatsappUrl = `https://wa.me/?text=Hi, interested in ${listing.title}`;
   const facilities = listing.facilities ? listing.facilities.split(',') : [];
 
   return (
     <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
-      <nav className="fixed top-0 w-full z-50 bg-black/50 backdrop-blur-md px-6 py-4 flex justify-between">
-        <Link href="/" className="flex gap-2 text-sm font-bold hover:text-blue-500"><ArrowLeft size={18}/> BACK</Link>
-        <button><Share2 size={18}/></button>
+      <nav className="fixed top-0 w-full z-50 bg-transparent hover:bg-black/80 transition-colors px-6 py-4 flex justify-between items-center pointer-events-none">
+        <Link href="/" className="flex gap-2 text-sm font-bold text-white bg-black/50 px-4 py-2 rounded-full pointer-events-auto hover:bg-blue-600 transition-all backdrop-blur-md"><ArrowLeft size={18}/> BACK</Link>
+        <button className="p-2 bg-black/50 text-white rounded-full pointer-events-auto backdrop-blur-md hover:bg-white hover:text-black transition-all"><Share2 size={18}/></button>
       </nav>
 
+      {/* 1. HERO IMAGE (Static at Top) */}
       <div className="relative w-full h-[60vh]">
-         <Image src={images[0]} alt={listing.title} fill className="object-cover" />
+         <Image src={heroImage} alt={listing.title} fill className="object-cover" priority />
          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"/>
          <div className="absolute bottom-0 left-0 w-full p-8 max-w-7xl mx-auto">
             <div className="flex gap-2 mb-2">
                 <span className="bg-orange-600 text-white text-[10px] font-bold px-2 py-1 rounded inline-block">{listing.condition || 'USED'}</span>
                 {listing.listingCategory && (
-                    <span className={`text-white text-[10px] font-bold px-2 py-1 rounded inline-block ${listing.listingCategory === 'RENT' ? 'bg-purple-600' : 'bg-green-600'}`}>
-                        FOR {listing.listingCategory}
-                    </span>
+                    <span className={`text-white text-[10px] font-bold px-2 py-1 rounded inline-block ${listing.listingCategory === 'RENT' ? 'bg-purple-600' : 'bg-green-600'}`}>FOR {listing.listingCategory}</span>
                 )}
             </div>
             <h1 className={`text-4xl md:text-5xl text-white ${serifFont.className} mb-2`}>{listing.title}</h1>
-            <p className="text-xl text-gray-300 flex gap-2 mt-2"><MapPin size={18} className="text-blue-500"/> {listing.location}</p>
+            <p className="text-xl text-gray-300 flex gap-2 mt-2"><MapPin size={18} className="text-blue-500"/> {listing.area}, {listing.state}</p>
          </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2 space-y-12">
             
-            {/* 1. HIGHLIGHTS GRID */}
+            {/* 2. HIGHLIGHTS (Icons) */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {listing.type === 'PROPERTY' ? (
                     <>
                        <StatCard icon={<BedDouble size={24}/>} label="Bedrooms" value={listing.bedrooms}/>
                        <StatCard icon={<Bath size={24}/>} label="Bathrooms" value={listing.bathrooms}/>
+                       <StatCard icon={<CarFront size={24}/>} label="Car Parks" value={listing.carParks}/>
                        <StatCard icon={<Maximize size={24}/>} label="Size" value={`${listing.sqft} sqft`}/>
-                       <StatCard icon={<Home size={24}/>} label="Type" value={listing.propertyType}/>
                     </>
                 ) : (
                     <>
@@ -64,7 +66,10 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                 )}
             </div>
 
-            {/* 2. FACILITIES (PROPERTY ONLY) */}
+            {/* 3. PHOTO GALLERY (Now placed HERE, below highlights) */}
+            <ImageGallery images={images} />
+
+            {/* 4. FACILITIES */}
             {listing.type === 'PROPERTY' && facilities.length > 0 && (
                 <div>
                     <h3 className="text-lg font-bold mb-6 border-l-4 border-purple-500 pl-3">Facilities</h3>
@@ -78,7 +83,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                 </div>
             )}
 
-            {/* 3. FULL SPECS TABLE */}
+            {/* 5. FULL SPECS */}
             <div>
                 <h3 className="text-lg font-bold mb-6 border-l-4 border-orange-500 pl-3">Specifications</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 text-sm">
@@ -110,13 +115,14 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                 </div>
             </div>
 
+            {/* 6. DESCRIPTION */}
             <div>
                 <h3 className="text-lg font-bold mb-4">Description</h3>
                 <div className="text-gray-400 whitespace-pre-line leading-relaxed bg-neutral-900/50 p-6 rounded-2xl border border-white/5">{listing.description}</div>
             </div>
         </div>
 
-        {/* AGENT CARD */}
+        {/* RIGHT: AGENT CARD */}
         <div>
             <div className="bg-white text-black p-6 rounded-2xl sticky top-24 shadow-2xl">
                 <div className="mb-6">
