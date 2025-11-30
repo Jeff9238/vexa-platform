@@ -18,9 +18,24 @@ model User {
   credits   Int      @default(0)
   createdAt DateTime @default(now())
   listings  Listing[]
+  favorites Favorite[] // <--- RESTORED
 }
 
-// 3. LISTING (ADDED CAR PARKS)
+// 3. FAVORITE (RESTORED)
+model Favorite {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId String
+
+  @@unique([userId, listingId])
+}
+
+// 4. LISTING
 model Listing {
   id          String   @id @default(uuid())
   title       String
@@ -34,22 +49,25 @@ model Listing {
   // Location Split
   area        String   @default("City")
   state       String   @default("Malaysia")
+  locationName String?
+  lat         Float?
+  lng         Float?
   
   // Status
   condition   String?
   verified    Boolean  @default(false)
-  
-  // Property Fields
-  listingCategory String? 
-  facilities      String? 
+
+  // Property
   bedrooms    Int?
   bathrooms   Int?
-  carParks    Int?     // <--- NEW FIELD
   sqft        Int?
-  propertyType String? 
+  carParks    Int?
+  propertyType String?
   furnishing  String?
+  listingCategory String?
+  facilities      String?
 
-  // Vehicle Fields
+  // Vehicle
   brand       String?
   model       String?
   year        Int?
@@ -65,10 +83,12 @@ model Listing {
   engineCC    Int?
   peakPower   Int?
   peakTorque  Int?
+  // Removed L/W/H as requested
 
   published   Boolean  @default(false)
   createdAt   DateTime @default(now())
 
   userId      String
   user        User     @relation(fields: [userId], references: [id])
+  favorites   Favorite[] // <--- RESTORED
 }

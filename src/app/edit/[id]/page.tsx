@@ -3,10 +3,11 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { getListing, updateListing } from '@/app/actions';
-import { ArrowLeft, Loader2, Save, Check, Upload, X, Star } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Check, Upload, X, Star, Home, Car } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
+import MapPicker from '@/components/MapPicker';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,7 +18,7 @@ const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah",
 const PROPERTY_TYPES = ["Terrace", "Condo", "Bungalow", "Semi-D", "Apartment", "Townhouse", "Shoplot", "Office", "Factory", "Warehouse", "Land", "Hotel"];
 const FACILITIES_LIST = ["Swimming Pool", "Gymnasium", "24H Security", "Parking", "Elevator", "Playground", "Balcony", "Aircon", "Wifi", "Kitchen Cabinet", "Near MRT/LRT", "Garden"];
 
-// Helper Type for Image Management
+// Helper Type for Hybrid Gallery (Old URLs + New Files)
 type ImageItem = {
     id: string;
     url: string;
@@ -33,12 +34,14 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
   const [saving, setSaving] = useState(false);
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
   
-  // NEW: Image State
+  // Hybrid Gallery State
   const [gallery, setGallery] = useState<ImageItem[]>([]);
 
   const [formData, setFormData] = useState({
     title: '', description: '', price: '', 
-    area: '', state: '', 
+    area: '', state: '', locationName: '',
+    lat: null as number | null, lng: null as number | null, 
+    
     type: 'PROPERTY', tags: '', condition: '',
     listingCategory: '',
     
@@ -59,13 +62,20 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
           title: data.title || '',
           description: data.description || '',
           price: data.price?.toString() || '',
+          
+          // Location
           area: data.area || '',
           state: data.state || '',
+          locationName: data.locationName || '',
+          lat: data.lat || null,
+          lng: data.lng || null,
+
           type: data.type || 'PROPERTY',
           tags: data.tags || '',
           condition: data.condition || '',
           listingCategory: data.listingCategory || '',
           
+          // Property
           propertyType: data.propertyType || '',
           bedrooms: data.bedrooms?.toString() || '',
           bathrooms: data.bathrooms?.toString() || '',
@@ -73,6 +83,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
           sqft: data.sqft?.toString() || '',
           furnishing: data.furnishing || '',
 
+          // Vehicle
           brand: data.brand || '',
           model: data.model || '',
           variant: data.variant || '',
@@ -90,11 +101,12 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
           peakTorque: data.peakTorque?.toString() || ''
         });
 
+        // Load Facilities
         if (data.facilities) {
             setSelectedFacilities(data.facilities.split(','));
         }
 
-        // Load existing images
+        // Load Images into Gallery State
         if (data.images) {
             const urls = data.images.split(',');
             const initialGallery = urls.map((url: string) => ({
@@ -108,7 +120,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     });
   }, [id]);
 
-  // --- IMAGE HANDLERS ---
+  // --- HANDLERS ---
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
     const newFiles = Array.from(e.target.files);
@@ -116,10 +128,10 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     const newItems: ImageItem[] = newFiles.map(file => ({
         id: Math.random().toString(36),
         url: URL.createObjectURL(file),
-        file: file // Mark as new file needing upload
+        file: file // Mark as new
     }));
 
-    setGallery(prev => [...prev, ...newItems].slice(0, 8));
+    setGallery(prev => [...prev, ...newItems].slice(0, 8)); // Max 8
   };
 
   const removeImage = (id: string) => {
@@ -147,6 +159,10 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
+  const handleLocationSelect = (lat: number, lng: number) => {
+    setFormData(prev => ({ ...prev, lat, lng }));
+  };
+
   // --- SAVE HANDLER ---
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,32 +170,33 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     setSaving(true);
 
     try {
-        // 1. Process Images: Upload new ones, Keep old ones
+        // 1. Process Images (Upload new ones, keep old ones)
         const finalImageUrls: string[] = [];
 
         for (const item of gallery) {
             if (item.file) {
-                // This is a new file, upload it
+                // New file -> Upload
                 const name = `${Date.now()}-${Math.random().toString(36).substring(7)}-${item.file.name}`;
                 const { error } = await supabase.storage.from('vexa-images').upload(name, item.file);
                 if (error) throw error;
                 const { data } = supabase.storage.from('vexa-images').getPublicUrl(name);
                 finalImageUrls.push(data.publicUrl);
             } else {
-                // This is an old URL, just keep it
+                // Old URL -> Keep
                 finalImageUrls.push(item.url);
             }
         }
 
-        // 2. Submit Data
+        // 2. Build Form Data
         const submitData = new FormData();
         submitData.append('id', id);
         Object.entries(formData).forEach(([key, value]) => {
-            submitData.append(key, value);
+             if (value !== null) submitData.append(key, value.toString());
         });
         submitData.append('facilities', selectedFacilities.join(','));
-        submitData.append('imageUrl', finalImageUrls.join(',')); // New Combined Image List
+        submitData.append('imageUrl', finalImageUrls.join(','));
 
+        // 3. Update
         await updateListing(submitData);
         alert("Updated Successfully!");
         router.push('/dashboard');
@@ -197,7 +214,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
 
   return (
     <div className="min-h-screen bg-neutral-950 text-white p-6 flex justify-center items-center font-sans">
-      <div className="max-w-4xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
+      <div className="max-w-5xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
         
         <div className="flex items-center gap-4 mb-8">
            <Link href="/dashboard" className="p-2 bg-white/5 rounded-full hover:bg-white/10"><ArrowLeft size={20}/></Link>
@@ -208,36 +225,55 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
         <form onSubmit={handleUpdate} className="space-y-8">
 
           {/* --- IMAGE MANAGER --- */}
-          <div className="grid grid-cols-4 gap-4">
-            {gallery.length < 8 && (
-                <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer">
-                    <input type="file" multiple onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                    <Upload className="text-blue-500" />
-                </div>
-            )}
-            
-            {gallery.map((item, idx) => (
-                <div key={item.id} className={`relative aspect-square bg-neutral-800 rounded-xl overflow-hidden border group transition-all ${idx === 0 ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/10'}`}>
-                    <Image src={item.url} alt="Preview" fill className="object-cover" />
-                    
-                    <button type="button" onClick={() => removeImage(item.id)} className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-20">
-                        <X size={12} />
-                    </button>
+          <div className="space-y-2">
+              <label className="label">Manage Photos (Max 8)</label>
+              <div className="grid grid-cols-4 gap-4">
+                {gallery.length < 8 && (
+                    <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer">
+                        <input type="file" multiple onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                        <Upload className="text-blue-500" />
+                    </div>
+                )}
+                
+                {gallery.map((item, idx) => (
+                    <div key={item.id} className={`relative aspect-square bg-neutral-800 rounded-xl overflow-hidden border group transition-all ${idx === 0 ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/10'}`}>
+                        <Image src={item.url} alt="Preview" fill className="object-cover" />
+                        
+                        <button type="button" onClick={() => removeImage(item.id)} className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-20">
+                            <X size={12} />
+                        </button>
 
-                    {idx !== 0 && (<button type="button" onClick={() => setAsCover(idx)} className="absolute top-1 left-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-yellow-500 z-20" title="Set as Cover"><Star size={12} /></button>)}
-                    
-                    {idx === 0 && (<div className="absolute bottom-0 inset-x-0 bg-blue-600 text-[10px] text-center py-1 font-bold tracking-widest z-10">COVER</div>)}
-                </div>
-            ))}
+                        {idx !== 0 && (<button type="button" onClick={() => setAsCover(idx)} className="absolute top-1 left-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-yellow-500 z-20" title="Set as Cover"><Star size={12} /></button>)}
+                        
+                        {idx === 0 && (<div className="absolute bottom-0 inset-x-0 bg-blue-600 text-[10px] text-center py-1 font-bold tracking-widest z-10">COVER</div>)}
+                    </div>
+                ))}
+              </div>
           </div>
 
-          {/* BASIC INFO */}
+          {/* --- BASIC INFO --- */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 border-b border-white/5 pb-8">
              <div className="col-span-2"><label className="label">Title</label><input name="title" value={formData.title} onChange={handleChange} className="input font-bold" /></div>
              <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400 font-bold" /></div>
              
+             {/* LOCATION */}
+             <div className="col-span-2 md:col-span-3"><label className="label">Building / Project Name</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon"/></div>
              <div><label className="label">State</label><select name="state" value={formData.state} onChange={handleChange} className="input">{MALAYSIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
              <div><label className="label">Area</label><input name="area" value={formData.area} onChange={handleChange} className="input" /></div>
+             
+             {/* MAP */}
+             <div className="col-span-2 md:col-span-3">
+                <div className="col-span-2 md:col-span-3">
+                <MapPicker 
+                    onLocationSelect={handleLocationSelect}
+                    initialLat={formData.lat} // Show existing pin
+                    initialLng={formData.lng} // Show existing pin
+                    searchQuery={`${formData.area}, ${formData.state}, Malaysia`}
+                />
+                {formData.lat && <p className="text-xs text-green-400 mt-2">✓ Saved Location: {formData.lat.toFixed(4)}, {formData.lng?.toFixed(4)}</p>}
+             </div>
+                {formData.lat && <p className="text-xs text-green-400 mt-2">✓ Saved Location: {formData.lat.toFixed(4)}, {formData.lng?.toFixed(4)} (Click map to change)</p>}
+             </div>
 
              {formData.type === 'PROPERTY' && (
                  <div><label className="label">Category</label><select name="listingCategory" value={formData.listingCategory} onChange={handleChange} className="input"><option>SALE</option><option>RENT</option></select></div>
@@ -249,7 +285,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
              <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32" /></div>
           </div>
 
-          {/* PROPERTY SPECIFIC */}
+          {/* --- PROPERTY SPECIFIC --- */}
           {formData.type === 'PROPERTY' && (
             <div className="space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -272,7 +308,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
 
-          {/* VEHICLE SPECIFIC */}
+          {/* --- VEHICLE SPECIFIC --- */}
           {formData.type === 'VEHICLE' && (
             <div className="space-y-6">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -285,7 +321,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
                     <div><label className="label">Origin</label><select name="origin" value={formData.origin} onChange={handleChange} className="input"><option>Local</option><option>Japan</option><option>Others</option></select></div>
                     <div><label className="label">Body</label><select name="bodyType" value={formData.bodyType} onChange={handleChange} className="input"><option>Sedan</option><option>SUV</option><option>MPV</option><option>4x4</option><option>Coupe</option><option>Others</option></select></div>
                     <div><label className="label">Trans.</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option><option>CVT</option></select></div>
-                    <div><label className="label">Fuel</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option><option>EV</option></select></div>
+                    <div><label className="label">Fuel</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option></select></div>
                     <div><label className="label">Engine CC</label><input type="number" name="engineCC" value={formData.engineCC} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Power</label><input type="number" name="peakPower" value={formData.peakPower} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Torque</label><input type="number" name="peakTorque" value={formData.peakTorque} onChange={handleChange} className="input"/></div>

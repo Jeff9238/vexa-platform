@@ -7,6 +7,7 @@ import { Upload, Sparkles, Check, Loader2, ArrowLeft, X, Home, Car, Star } from 
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import MapPicker from '@/components/MapPicker'; 
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -27,14 +28,13 @@ export default function PostAd() {
   
   const [formData, setFormData] = useState({
     title: '', description: '', price: '', 
-    area: '', state: 'Penang', 
-    type: 'PROPERTY', tags: '', condition: 'Used',
-    listingCategory: 'SALE',
+    area: '', state: 'Penang', locationName: '', // NEW FIELD
+    lat: null as number | null, lng: null as number | null, 
+    type: 'VEHICLE', tags: '', condition: 'Recon',
     
-    // Property (Added Car Parks)
+    listingCategory: 'SALE',
     propertyType: 'Terrace', bedrooms: '', bathrooms: '', carParks: '', sqft: '', furnishing: 'Partly Furnished',
     
-    // Vehicle
     brand: '', model: '', variant: '', series: '', year: '', mileage: '', 
     color: '', origin: 'Local', bodyType: 'Sedan', transmission: 'Automatic', fuelType: 'Petrol', seats: '',
     engineCC: '', peakPower: '', peakTorque: ''
@@ -84,6 +84,10 @@ export default function PostAd() {
     }
   };
 
+  const handleLocationSelect = (lat: number, lng: number) => {
+    setFormData(prev => ({ ...prev, lat, lng }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (files.length === 0) return alert("Upload at least one image.");
@@ -99,7 +103,9 @@ export default function PostAd() {
       }
 
       const form = new FormData();
-      Object.entries(formData).forEach(([k, v]) => form.append(k, v));
+      Object.entries(formData).forEach(([k, v]) => {
+        if (v !== null) form.append(k, v.toString());
+      });
       form.append('imageUrl', urls.join(','));
       form.append('facilities', selectedFacilities.join(','));
 
@@ -134,6 +140,7 @@ export default function PostAd() {
 
         <form onSubmit={handleSubmit} className="space-y-8">
           
+          {/* IMAGE GRID */}
           <div className="grid grid-cols-4 gap-4">
             {files.length < 8 && (
                 <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer">
@@ -152,11 +159,28 @@ export default function PostAd() {
           </div>
           {aiLoading && <p className="text-yellow-400 text-xs animate-pulse">✨ AI Analyzing...</p>}
 
+          {/* BASIC INFO */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-white/5">
              <div className="col-span-2"><label className="label">Title</label><input name="title" value={formData.title} onChange={handleChange} className="input" placeholder="e.g. Luxury Condo in KL" /></div>
              <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400" /></div>
+             
+             {/* NEW: LOCATION NAME */}
+             <div className="col-span-2 md:col-span-3"><label className="label">Building / Project Name / Dealership</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon, Queensbay Mall, HX Auto"/></div>
+
              <div><label className="label">State</label><select name="state" value={formData.state} onChange={handleChange} className="input">{MALAYSIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
              <div><label className="label">Area</label><input name="area" value={formData.area} onChange={handleChange} className="input" placeholder="e.g. Simpang Ampat"/></div>
+             
+             <div className="col-span-2 md:col-span-3">
+                {/* MAP PICKER WITH AUTO-SEARCH */}
+             <div className="col-span-2 md:col-span-3">
+                <MapPicker 
+                    onLocationSelect={handleLocationSelect} 
+                    // Pass the text query: "Simpang Ampat, Penang, Malaysia"
+                    searchQuery={`${formData.area}, ${formData.state}, Malaysia`}
+                />
+             </div>
+             </div>
+
              {formData.type === 'PROPERTY' && (
                  <div><label className="label">Listing Category</label><div className="flex bg-black p-1 rounded-lg border border-white/10"><button type="button" onClick={() => setFormData({...formData, listingCategory: 'SALE'})} className={`flex-1 py-2 text-xs font-bold rounded ${formData.listingCategory === 'SALE' ? 'bg-green-600 text-white' : 'text-gray-500'}`}>SALE</button><button type="button" onClick={() => setFormData({...formData, listingCategory: 'RENT'})} className={`flex-1 py-2 text-xs font-bold rounded ${formData.listingCategory === 'RENT' ? 'bg-purple-600 text-white' : 'text-gray-500'}`}>RENT</button></div></div>
              )}
@@ -164,37 +188,23 @@ export default function PostAd() {
              <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-24" /></div>
           </div>
 
-          {/* PROPERTY FORM */}
+          {/* SPECS FORMS (Unchanged from previous steps) */}
           {formData.type === 'PROPERTY' && (
             <div className="space-y-6 pt-6 border-t border-white/5">
-                <div>
-                    <h3 className="text-blue-500 text-xs font-bold uppercase tracking-widest mb-4">Property Specs</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <div><label className="label">Type</label><select name="propertyType" value={formData.propertyType} onChange={handleChange} className="input">{PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
-                        <div><label className="label">Bedrooms</label><input name="bedrooms" type="number" value={formData.bedrooms} onChange={handleChange} className="input" /></div>
-                        <div><label className="label">Bathrooms</label><input name="bathrooms" type="number" value={formData.bathrooms} onChange={handleChange} className="input" /></div>
-                        {/* NEW: CAR PARKS */}
-                        <div><label className="label">Car Parks</label><input name="carParks" type="number" value={formData.carParks} onChange={handleChange} className="input" placeholder="e.g. 2" /></div>
-                        <div><label className="label">Size (Sq.ft)</label><input name="sqft" type="number" value={formData.sqft} onChange={handleChange} className="input" /></div>
-                        <div><label className="label">Furnishing</label><select name="furnishing" value={formData.furnishing} onChange={handleChange} className="input"><option>Fully Furnished</option><option>Partly Furnished</option><option>Unfurnished</option></select></div>
-                    </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label className="label">Type</label><select name="propertyType" value={formData.propertyType} onChange={handleChange} className="input">{PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                    <div><label className="label">Bedrooms</label><input name="bedrooms" type="number" value={formData.bedrooms} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Bathrooms</label><input name="bathrooms" type="number" value={formData.bathrooms} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Car Parks</label><input name="carParks" type="number" value={formData.carParks} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Size (Sq.ft)</label><input name="sqft" type="number" value={formData.sqft} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Furnishing</label><select name="furnishing" value={formData.furnishing} onChange={handleChange} className="input"><option>Fully Furnished</option><option>Partly Furnished</option><option>Unfurnished</option></select></div>
                 </div>
-                <div>
-                    <h3 className="text-blue-500 text-xs font-bold uppercase tracking-widest mb-4">Facilities</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                        {FACILITIES_LIST.map((facility) => (
-                            <button type="button" key={facility} onClick={() => toggleFacility(facility)} className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${selectedFacilities.includes(facility) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-gray-400 hover:bg-neutral-700'}`}>{selectedFacilities.includes(facility) ? <Check size={14} className="inline mr-2"/> : null}{facility}</button>
-                        ))}
-                    </div>
-                </div>
+                <div><h3 className="text-blue-500 text-xs font-bold uppercase tracking-widest mb-4">Facilities</h3><div className="grid grid-cols-2 md:grid-cols-4 gap-3">{FACILITIES_LIST.map((facility) => (<button type="button" key={facility} onClick={() => toggleFacility(facility)} className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${selectedFacilities.includes(facility) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-gray-400 hover:bg-neutral-700'}`}>{selectedFacilities.includes(facility) ? <Check size={14} className="inline mr-2"/> : null}{facility}</button>))}</div></div>
             </div>
           )}
 
-          {/* VEHICLE FORM (Same as before) */}
           {formData.type === 'VEHICLE' && (
             <div className="space-y-6 pt-6 border-t border-white/5">
-                {/* ... Vehicle Fields from previous step ... */}
-                {/* For brevity, keeping vehicle fields same as last working version */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div><label className="label">Brand</label><input name="brand" value={formData.brand} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Model</label><input name="model" value={formData.model} onChange={handleChange} className="input"/></div>
@@ -203,8 +213,8 @@ export default function PostAd() {
                     <div><label className="label">Mileage</label><input type="number" name="mileage" value={formData.mileage} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Color</label><input name="color" value={formData.color} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Origin</label><select name="origin" value={formData.origin} onChange={handleChange} className="input"><option>Local</option><option>Japan</option><option>Others</option></select></div>
-                    <div><label className="label">Body</label><select name="bodyType" value={formData.bodyType} onChange={handleChange} className="input"><option>Sedan</option><option>SUV</option><option>MPV</option><option>4x4</option><option>Coupe</option></select></div>
-                    <div><label className="label">Trans.</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option></select></div>
+                    <div><label className="label">Body</label><select name="bodyType" value={formData.bodyType} onChange={handleChange} className="input"><option>Sedan</option><option>SUV</option><option>MPV</option><option>4x4</option><option>Coupe</option><option>Others</option></select></div>
+                    <div><label className="label">Trans.</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option><option>CVT</option></select></div>
                     <div><label className="label">Fuel</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option></select></div>
                     <div><label className="label">Seats</label><input type="number" name="seats" value={formData.seats} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Engine CC</label><input type="number" name="engineCC" value={formData.engineCC} onChange={handleChange} className="input"/></div>

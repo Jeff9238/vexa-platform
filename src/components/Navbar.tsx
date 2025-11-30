@@ -111,9 +111,11 @@ export default function Navbar() {
             </SignedOut>
 
             <SignedIn>
-                <button className="hidden md:flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-red-500 hover:bg-white/5 transition-all">
-                    <Heart size={20} />
-                </button>
+                <Link href="/favorites">
+                    <button className="hidden md:flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-red-500 hover:bg-white/5 transition-all">
+                        <Heart size={20} />
+                    </button>
+                </Link>
 
                 <Link href="/dashboard" className="hidden md:flex items-center gap-2 text-gray-300 font-bold text-sm hover:text-white transition-colors bg-white/5 px-4 py-2.5 rounded-full border border-white/5 hover:border-white/20">
                     <LayoutDashboard size={16}/> <span className="hidden lg:inline">Dashboard</span>
