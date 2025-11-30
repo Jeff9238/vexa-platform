@@ -1,176 +1,158 @@
-import { prisma } from "@/lib/prisma"; // FIXED IMPORT
+import { prisma } from "@/lib/prisma";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, MapPin, BedDouble, Car, CheckCircle, Share2, MessageCircle, Phone, ImageIcon } from "lucide-react";
+import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare } from "lucide-react";
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
-export default async function ListingPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
+export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-
-  const listing = await prisma.listing.findUnique({
-    where: { id },
-    include: { user: true }
-  });
-
+  const listing = await prisma.listing.findUnique({ where: { id }, include: { user: true } });
   if (!listing) notFound();
 
-  const allImages = listing.images ? listing.images.split(',') : [];
-  const heroImage = allImages[0] || 'https://via.placeholder.com/800';
-  const galleryImages = allImages.slice(1); 
-
-  const whatsappMessage = `Hi ${listing.user.name}, I am interested in your listing on VEXA: ${listing.title} (RM ${listing.price})`;
-  const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappMessage)}`;
+  const images = listing.images ? listing.images.split(',') : [];
+  const whatsappUrl = `https://wa.me/?text=Hi, interested in ${listing.title}`;
+  const facilities = listing.facilities ? listing.facilities.split(',') : [];
 
   return (
     <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
-      {/* HEADER */}
-      <nav className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/10 px-6 py-4 flex justify-between items-center">
-        <Link href="/" className="flex items-center gap-2 text-sm font-bold hover:text-blue-500 transition-colors">
-            <ArrowLeft size={18}/> BACK
-        </Link>
-        <div className="flex gap-4">
-            <button className="p-2 hover:bg-white/10 rounded-full transition-colors">
-                <Share2 size={18}/>
-            </button>
-        </div>
+      <nav className="fixed top-0 w-full z-50 bg-black/50 backdrop-blur-md px-6 py-4 flex justify-between">
+        <Link href="/" className="flex gap-2 text-sm font-bold hover:text-blue-500"><ArrowLeft size={18}/> BACK</Link>
+        <button><Share2 size={18}/></button>
       </nav>
 
-      {/* --- HERO IMAGE --- */}
-      <div className="relative w-full h-[50vh] md:h-[65vh] bg-neutral-900 group">
-         <Image 
-            src={heroImage} 
-            alt={listing.title} 
-            fill 
-            className="object-cover"
-            priority
-         />
-         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"></div>
-         <div className="absolute bottom-0 left-0 w-full p-6 md:p-12">
-            <div className="max-w-7xl mx-auto">
-                <span className="inline-block px-3 py-1 bg-blue-600 text-white text-[10px] font-bold uppercase tracking-widest rounded-sm mb-4">
-                    {listing.type}
-                </span>
-                <h1 className={`text-4xl md:text-6xl text-white ${serifFont.className} mb-2`}>
-                    {listing.title}
-                </h1>
-                <p className="text-xl md:text-2xl text-gray-300 font-light flex items-center gap-2">
-                    <MapPin size={18} className="text-blue-500"/> 
-                    {listing.type === 'PROPERTY' ? 'Penang, Malaysia' : 'Glenmarie, Shah Alam'} 
-                </p>
+      <div className="relative w-full h-[60vh]">
+         <Image src={images[0]} alt={listing.title} fill className="object-cover" />
+         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"/>
+         <div className="absolute bottom-0 left-0 w-full p-8 max-w-7xl mx-auto">
+            <div className="flex gap-2 mb-2">
+                <span className="bg-orange-600 text-white text-[10px] font-bold px-2 py-1 rounded inline-block">{listing.condition || 'USED'}</span>
+                {listing.listingCategory && (
+                    <span className={`text-white text-[10px] font-bold px-2 py-1 rounded inline-block ${listing.listingCategory === 'RENT' ? 'bg-purple-600' : 'bg-green-600'}`}>
+                        FOR {listing.listingCategory}
+                    </span>
+                )}
             </div>
+            <h1 className={`text-4xl md:text-5xl text-white ${serifFont.className} mb-2`}>{listing.title}</h1>
+            <p className="text-xl text-gray-300 flex gap-2 mt-2"><MapPin size={18} className="text-blue-500"/> {listing.location}</p>
          </div>
       </div>
 
-      {/* --- CONTENT --- */}
       <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-3 gap-12">
         <div className="lg:col-span-2 space-y-12">
-            {galleryImages.length > 0 && (
+            
+            {/* 1. HIGHLIGHTS GRID */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {listing.type === 'PROPERTY' ? (
+                    <>
+                       <StatCard icon={<BedDouble size={24}/>} label="Bedrooms" value={listing.bedrooms}/>
+                       <StatCard icon={<Bath size={24}/>} label="Bathrooms" value={listing.bathrooms}/>
+                       <StatCard icon={<Maximize size={24}/>} label="Size" value={`${listing.sqft} sqft`}/>
+                       <StatCard icon={<Home size={24}/>} label="Type" value={listing.propertyType}/>
+                    </>
+                ) : (
+                    <>
+                       <StatCard icon={<Calendar size={24}/>} label="Year" value={listing.year}/>
+                       <StatCard icon={<Gauge size={24}/>} label="Mileage" value={`${listing.mileage} km`}/>
+                       <StatCard icon={<Settings2 size={24}/>} label="Trans." value={listing.transmission}/>
+                       <StatCard icon={<Fuel size={24}/>} label="Fuel" value={listing.fuelType}/>
+                    </>
+                )}
+            </div>
+
+            {/* 2. FACILITIES (PROPERTY ONLY) */}
+            {listing.type === 'PROPERTY' && facilities.length > 0 && (
                 <div>
-                    <h3 className="text-sm font-bold mb-4 text-gray-500 uppercase tracking-widest flex items-center gap-2">
-                        <ImageIcon size={14}/> Photo Gallery ({galleryImages.length + 1})
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {galleryImages.map((img, idx) => (
-                            <div key={idx} className="relative aspect-[4/3] bg-neutral-800 rounded-xl overflow-hidden cursor-pointer hover:opacity-80 transition-opacity">
-                                <Image src={img} alt={`Gallery ${idx}`} fill className="object-cover"/>
+                    <h3 className="text-lg font-bold mb-6 border-l-4 border-purple-500 pl-3">Facilities</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                        {facilities.map((fac, i) => (
+                            <div key={i} className="flex items-center gap-2 text-sm text-gray-300 bg-neutral-900 px-3 py-2 rounded-lg border border-white/5">
+                                <CheckSquare size={14} className="text-green-500"/> {fac}
                             </div>
                         ))}
                     </div>
                 </div>
             )}
-            
-            <div className="flex flex-wrap items-center justify-between gap-6 border-b border-white/10 pb-8">
-                <div>
-                    <p className="text-sm text-gray-400 uppercase tracking-widest mb-1">Asking Price</p>
-                    <div className={`text-4xl font-bold text-white ${serifFont.className}`}>
-                        RM {listing.price.toLocaleString()}
-                    </div>
-                </div>
-                <div className="flex gap-8">
-                    {listing.type === 'PROPERTY' ? (
+
+            {/* 3. FULL SPECS TABLE */}
+            <div>
+                <h3 className="text-lg font-bold mb-6 border-l-4 border-orange-500 pl-3">Specifications</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 text-sm">
+                    {listing.type === 'VEHICLE' ? (
                         <>
-                           <div className="text-center">
-                              <BedDouble size={24} className="mx-auto mb-2 text-gray-500"/>
-                              <span className="block font-bold">5 Beds</span>
-                           </div>
-                           <div className="text-center">
-                              <CheckCircle size={24} className="mx-auto mb-2 text-gray-500"/>
-                              <span className="block font-bold">Verified</span>
-                           </div>
+                            <Row label="Brand" value={listing.brand} />
+                            <Row label="Model" value={listing.model} />
+                            <Row label="Variant" value={listing.variant} />
+                            <Row label="Series" value={listing.series} />
+                            <Row label="Year" value={listing.year} />
+                            <Row label="Color" value={listing.color} />
+                            <Row label="Body Type" value={listing.bodyType} />
+                            <Row label="Seats" value={listing.seats} />
+                            <Row label="Origin" value={listing.origin} />
+                            <Row label="Engine CC" value={listing.engineCC} />
+                            <Row label="Peak Power" value={listing.peakPower ? `${listing.peakPower} KW` : '-'} />
+                            <Row label="Peak Torque" value={listing.peakTorque ? `${listing.peakTorque} Nm` : '-'} />
                         </>
                     ) : (
                         <>
-                           <div className="text-center">
-                              <Car size={24} className="mx-auto mb-2 text-gray-500"/>
-                              <span className="block font-bold">2024</span>
-                           </div>
-                           <div className="text-center">
-                              <CheckCircle size={24} className="mx-auto mb-2 text-gray-500"/>
-                              <span className="block font-bold">In Stock</span>
-                           </div>
+                            <Row label="Category" value={listing.listingCategory} />
+                            <Row label="Property Type" value={listing.propertyType} />
+                            <Row label="Furnishing" value={listing.furnishing} />
+                            <Row label="Bedrooms" value={listing.bedrooms} />
+                            <Row label="Bathrooms" value={listing.bathrooms} />
+                            <Row label="Size" value={`${listing.sqft} sq.ft`} />
                         </>
                     )}
                 </div>
             </div>
 
             <div>
-                <h3 className="text-xl font-bold mb-4 text-gray-200">Description</h3>
-                <p className="text-gray-400 leading-relaxed whitespace-pre-line text-lg">
-                    {listing.description}
-                </p>
-            </div>
-
-            <div>
-                <h3 className="text-sm font-bold mb-4 text-gray-500 uppercase tracking-widest">Features</h3>
-                <div className="flex flex-wrap gap-3">
-                    {listing.tags.split(',').map((tag, i) => (
-                        <span key={i} className="px-4 py-2 bg-neutral-900 border border-white/10 rounded-lg text-sm text-gray-300">
-                            {tag.trim()}
-                        </span>
-                    ))}
-                </div>
+                <h3 className="text-lg font-bold mb-4">Description</h3>
+                <div className="text-gray-400 whitespace-pre-line leading-relaxed bg-neutral-900/50 p-6 rounded-2xl border border-white/5">{listing.description}</div>
             </div>
         </div>
 
-        <div className="lg:col-span-1">
-            <div className="sticky top-24 bg-white text-black rounded-2xl p-6 shadow-2xl">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center text-xl font-bold text-blue-800">
-                        {listing.user?.name ? listing.user.name.substring(0,2).toUpperCase() : 'AG'}
-                    </div>
-                    <div>
-                        <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Listed By</p>
-                        <h4 className={`text-xl font-bold ${serifFont.className}`}>{listing.user?.name || 'VEXA Agent'}</h4>
-                        <p className="text-sm text-green-600 font-bold flex items-center gap-1">
-                            <CheckCircle size={12}/> Super Agent
-                        </p>
-                    </div>
+        {/* AGENT CARD */}
+        <div>
+            <div className="bg-white text-black p-6 rounded-2xl sticky top-24 shadow-2xl">
+                <div className="mb-6">
+                    <p className="text-xs text-gray-500 font-bold uppercase">Price</p>
+                    <div className="text-4xl font-bold">RM {listing.price.toLocaleString()}</div>
                 </div>
-                <div className="space-y-3">
-                    <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl transition-all">
-                        <MessageCircle size={20}/> WhatsApp
-                    </a>
-                    <button className="flex items-center justify-center gap-2 w-full bg-gray-100 hover:bg-gray-200 text-black font-bold py-4 rounded-xl transition-all">
-                        <Phone size={20}/> Call Agent
-                    </button>
+                <a href={whatsappUrl} target="_blank" className="block w-full bg-green-600 text-white text-center font-bold py-4 rounded-xl mb-3 hover:bg-green-700">WhatsApp Agent</a>
+                <div className="mt-6 pt-6 border-t flex items-center gap-4">
+                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center font-bold text-blue-800">{listing.user.name?.substring(0,2)}</div>
+                    <div><p className="font-bold">{listing.user.name}</p><p className="text-xs text-blue-600 font-bold flex items-center gap-1"><CheckCircle size={12}/> Verified Dealer</p></div>
                 </div>
-                <p className="text-xs text-center text-gray-400 mt-6">
-                    Reference ID: {listing.id.substring(0,8)} <br/>
-                    Posted on VEXA Marketplace
-                </p>
             </div>
         </div>
 
       </div>
     </main>
   );
+}
+
+function StatCard({ icon, label, value }: any) {
+    if (!value) return null;
+    return (
+        <div className="bg-neutral-900 border border-white/10 rounded-2xl p-4 flex flex-col items-center justify-center text-center">
+            <div className="text-blue-500 mb-2">{icon}</div>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</p>
+            <p className="text-lg font-bold text-white">{value}</p>
+        </div>
+    );
+}
+
+function Row({label, value}: any) {
+    if(!value) return null;
+    return (
+        <div className="flex justify-between border-b border-white/10 pb-2">
+            <span className="text-gray-500 w-1/3">{label}</span>
+            <span className="text-white font-medium w-2/3 text-right uppercase">{value}</span>
+        </div>
+    )
 }

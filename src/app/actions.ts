@@ -2,38 +2,26 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
-import { currentUser } from "@clerk/nextjs/server"; // Import Clerk
+import { currentUser } from "@clerk/nextjs/server";
+import { revalidatePath } from "next/cache";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// --- HELPER: Get the Real Database User ---
+// --- HELPER: Get User ---
 async function getAuthenticatedUser() {
-  // 1. Get the logged-in user from Clerk
   const clerkUser = await currentUser();
-  if (!clerkUser || !clerkUser.emailAddresses[0]) {
-    throw new Error("Please log in first.");
-  }
+  if (!clerkUser || !clerkUser.emailAddresses[0]) throw new Error("Please log in.");
 
   const email = clerkUser.emailAddresses[0].emailAddress;
   const name = clerkUser.firstName + " " + clerkUser.lastName;
 
-  // 2. Check if they exist in OUR Database (Supabase)
-  let dbUser = await prisma.user.findUnique({
-    where: { email: email }
-  });
+  let dbUser = await prisma.user.findUnique({ where: { email } });
 
-  // 3. If not, CREATE them automatically (The "Sync")
   if (!dbUser) {
     dbUser = await prisma.user.create({
-      data: {
-        email: email,
-        name: name || "New User",
-        role: "USER",
-        credits: 10, // Give 10 Free Credits to new users!
-      }
+      data: { email, name: name || "New User", role: "USER", credits: 10 }
     });
   }
-
   return dbUser;
 }
 
@@ -41,96 +29,116 @@ async function getAuthenticatedUser() {
 export async function analyzeImage(imageBase64: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    const prompt = `Analyze this image. If Vehicle: return brand, model, year. If Property: return type, style. Return JSON only.`;
     
-    const prompt = `
-      You are an expert Real Estate and Automotive Copywriter.
-      Analyze this image. 
-      If it is a Property: Provide a Catchy Title, a Luxurious Description (max 3 sentences), and 4 comma-separated tags.
-      If it is a Vehicle: Provide a Title (Model/Year), a Technical Description, and 4 tags.
-      
-      Return ONLY valid JSON like this:
-      {
-        "title": "Modern Beachfront Villa",
-        "description": "Experience unparalleled luxury...",
-        "type": "PROPERTY", 
-        "tags": "Luxury, Pool, View, Modern"
-      }
-    `;
-
-    const base64Data = imageBase64.split(',')[1] || imageBase64;
-    const result = await model.generateContent([
-      prompt,
-      { inlineData: { data: base64Data, mimeType: "image/jpeg" } },
-    ]);
-
-    const response = await result.response;
-    const cleanText = response.text().replace(/```json|```/g, '').trim();
-    return JSON.parse(cleanText);
-
+    const result = await model.generateContent([prompt, { inlineData: { data: imageBase64.split(',')[1], mimeType: "image/jpeg" } }]);
+    const text = result.response.text().replace(/```json|```/g, '').trim();
+    return JSON.parse(text);
   } catch (error) {
-    console.error("Gemini AI Failed:", error);
+    console.error("AI Failed:", error);
     return null;
   }
 }
 
 // --- ACTION B: CREATE LISTING ---
 export async function createListing(formData: FormData) {
-  // 1. Get the REAL user (No more hardcoded ID!)
   const user = await getAuthenticatedUser();
 
-  const title = formData.get('title') as string;
-  const description = formData.get('description') as string;
-  const rawPrice = formData.get('price') as string;
-  const price = rawPrice ? parseFloat(rawPrice) : 0;
-  const type = formData.get('type') as string;
-  const tags = formData.get('tags') as string;
-  const imageUrl = formData.get('imageUrl') as string;
+  const getInt = (key: string) => {
+    const val = formData.get(key);
+    return val ? parseInt(val as string) : null;
+  };
 
-  // 2. Check Credits
-  if (user.credits < 5) {
-    throw new Error("Insufficient Credits! You have " + user.credits + ". Need 5.");
-  }
+  // Safe defaults for location
+  const area = formData.get('area') as string || "City";
+  const state = formData.get('state') as string || "Malaysia";
 
-  // 3. Perform Transaction
+  const data = {
+    title: formData.get('title') as string,
+    description: formData.get('description') as string,
+    price: parseFloat(formData.get('price') as string) || 0,
+    area, state, location: `${area}, ${state}`, // Combine for backup
+    type: formData.get('type') as string,
+    tags: formData.get('tags') as string,
+    images: formData.get('imageUrl') as string,
+    condition: formData.get('condition') as string,
+    
+    // NEW PROPERTY FIELDS
+    listingCategory: formData.get('listingCategory') as string, // SALE or RENT
+    facilities: formData.get('facilities') as string, // "Pool,Gym"
+
+    // Property Specs
+    bedrooms: getInt('bedrooms'),
+    bathrooms: getInt('bathrooms'),
+    sqft: getInt('sqft'),
+    propertyType: formData.get('propertyType') as string,
+    furnishing: formData.get('furnishing') as string,
+
+    // Vehicle Core
+    brand: formData.get('brand') as string,
+    model: formData.get('model') as string,
+    variant: formData.get('variant') as string,
+    series: formData.get('series') as string,
+    color: formData.get('color') as string,
+    origin: formData.get('origin') as string,
+    bodyType: formData.get('bodyType') as string,
+    transmission: formData.get('transmission') as string,
+    fuelType: formData.get('fuelType') as string,
+    year: getInt('year'),
+    mileage: getInt('mileage'),
+    seats: getInt('seats'),
+
+    // Vehicle Tech
+    engineCC: getInt('engineCC'),
+    peakPower: getInt('peakPower'),
+    peakTorque: getInt('peakTorque'),
+    length: getInt('length'),
+    width: getInt('width'),
+    height: getInt('height'),
+    wheelBase: getInt('wheelBase'),
+    kerbWeight: getInt('kerbWeight'),
+    fuelTank: getInt('fuelTank'),
+
+    published: true,
+    user: { connect: { id: user.id } }
+  };
+
+  if (user.credits < 5) throw new Error("Insufficient Credits!");
+
   await prisma.$transaction([
-    prisma.listing.create({
-      data: {
-        title,
-        description,
-        price,
-        type,
-        tags,
-        images: imageUrl,
-        published: true,
-        user: {
-            connect: { id: user.id } // Connect to the Real User
-        }
-      }
-    }),
-    prisma.user.update({
-      where: { id: user.id },
-      data: { credits: { decrement: 5 } }
-    })
+    prisma.listing.create({ data }),
+    prisma.user.update({ where: { id: user.id }, data: { credits: { decrement: 5 } } })
   ]);
 
+  revalidatePath('/');
+  revalidatePath('/dashboard');
   return { success: true };
 }
 
 // --- ACTION C: DELETE LISTING ---
-import { revalidatePath } from "next/cache";
+export async function deleteListing(id: string) {
+  await prisma.listing.delete({ where: { id } });
+  revalidatePath('/');
+  revalidatePath('/dashboard');
+  return { success: true };
+}
 
-export async function deleteListing(listingId: string) {
-  try {
-    // Optional Security: Check if the user owns this listing before deleting?
-    // For now, we trust the dashboard UI.
-    await prisma.listing.delete({
-      where: { id: listingId }
-    });
-    
-    revalidatePath('/');
-    revalidatePath('/dashboard');
-    return { success: true };
-  } catch (error) {
-    return { success: false };
-  }
+// --- ACTION D: GET LISTING ---
+export async function getListing(id: string) {
+  return await prisma.listing.findUnique({ where: { id } });
+}
+
+// --- ACTION E: UPDATE LISTING ---
+export async function updateListing(formData: FormData) {
+  const id = formData.get('id') as string;
+  // (Simplified update logic for now)
+  const data = {
+    title: formData.get('title') as string,
+    description: formData.get('description') as string,
+    price: parseFloat(formData.get('price') as string) || 0,
+  };
+  await prisma.listing.update({ where: { id }, data });
+  revalidatePath('/');
+  revalidatePath(`/listing/${id}`);
+  return { success: true };
 }

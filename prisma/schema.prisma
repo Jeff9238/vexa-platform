@@ -1,3 +1,4 @@
+// 1. CONNECTION
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,27 +9,70 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// 1. THE USER (Agents & Buyers)
+// 2. USER
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
   name      String?
-  role      String   @default("USER") // AGENT or USER
-  credits   Int      @default(0)      // For posting ads
+  role      String   @default("USER")
+  credits   Int      @default(0)
   createdAt DateTime @default(now())
-  
   listings  Listing[]
 }
 
-// 2. THE LISTING
+// 3. LISTING (UPDATED FOR PROPERTY)
 model Listing {
   id          String   @id @default(uuid())
   title       String
   description String
   price       Float
   type        String   // "PROPERTY" or "VEHICLE"
-  tags        String   // AI Tags
-  images      String   // URL from Supabase Storage
+  tags        String
+  images      String
+  location    String   @default("Malaysia")
+  
+  // --- NEW LOCATION SPLIT ---
+  area        String   @default("City")
+  state       String   @default("Malaysia")
+
+  // --- SHARED STATUS ---
+  condition   String?  // New, Used, Recon (Vehicles)
+  verified    Boolean  @default(false)
+  
+  // --- NEW PROPERTY FIELDS ---
+  listingCategory String? // "SALE" or "RENT"
+  facilities      String? // "Pool,Gym,Security" (Comma separated)
+
+  // --- PROPERTY SPECS ---
+  bedrooms    Int?
+  bathrooms   Int?
+  sqft        Int?
+  propertyType String? // Added Factory, Land, etc.
+  furnishing  String?
+
+  // --- VEHICLE SPECS (UNCHANGED) ---
+  brand       String?
+  model       String?
+  year        Int?
+  variant     String?
+  series      String?
+  color       String?
+  mileage     Int?
+  transmission String?
+  fuelType    String?
+  bodyType    String?
+  seats       Int?
+  origin      String?
+  engineCC    Int?
+  peakPower   Int?
+  peakTorque  Int?
+  length      Int?
+  width       Int?
+  height      Int?
+  wheelBase   Int?
+  kerbWeight  Int?
+  fuelTank    Int?
+
   published   Boolean  @default(false)
   createdAt   DateTime @default(now())
 
