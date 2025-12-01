@@ -1,175 +1,148 @@
+import { prisma } from "@/lib/prisma";
 import Image from "next/image";
-import Link from "next/link"; 
+import Link from "next/link";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { Menu, BedDouble, Car, MessageCircle, ArrowRight, LayoutDashboard, Plus, MapPin, Heart } from "lucide-react"; 
-import { prisma } from "@/lib/prisma"; 
-import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"; 
-import HeroSearch from "@/components/HeroSearch"; 
-import Navbar from "@/components/Navbar"; 
-import FavoriteButton from "@/components/FavoriteButton"; 
+import { BedDouble, Car, ArrowLeft, Filter, MapPin } from "lucide-react";
+import FilterSidebar from "@/components/FilterSidebar";
+import { Suspense } from "react"; // <--- NEW IMPORT
 
-// 1. Setup Premium Fonts
-const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
+const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
-// SERVER SIDE: Fetch Data
-async function getListings() {
-  try {
-    const listings = await prisma.listing.findMany({
-      where: { published: true },
-      include: { user: true },
-      orderBy: { createdAt: 'desc' }, 
-      take: 50 
-    });
-    return listings;
-  } catch (error) {
-    console.error("Database Error:", error);
-    return [];
+export default async function SearchPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+  
+  const params = await searchParams;
+  const typeFilter = typeof params.type === 'string' ? params.type : 'VEHICLE';
+  const query = typeof params.q === 'string' ? params.q : undefined;
+  
+  // Filters
+  const listingCategory = typeof params.listingCategory === 'string' ? params.listingCategory : undefined;
+  const bodyType = typeof params.bodyType === 'string' ? params.bodyType : undefined;
+  const stateFilter = typeof params.state === 'string' ? params.state : undefined;
+
+  const minPrice = params.minPrice ? parseFloat(params.minPrice as string) : undefined;
+  const maxPrice = params.maxPrice ? parseFloat(params.maxPrice as string) : undefined;
+  const brand = typeof params.brand === 'string' ? params.brand : undefined;
+  const year = params.year ? parseInt(params.year as string) : undefined;
+  const bedrooms = params.bedrooms ? parseInt(params.bedrooms as string) : undefined;
+  const propertyType = typeof params.propertyType === 'string' ? params.propertyType : undefined;
+
+  const whereClause: any = {
+    published: true,
+    type: typeFilter,
+  };
+
+  if (listingCategory) whereClause.listingCategory = listingCategory;
+  if (bodyType) whereClause.bodyType = bodyType;
+  if (stateFilter) whereClause.state = { equals: stateFilter, mode: 'insensitive' };
+
+  if (query) {
+    whereClause.OR = [
+      { title: { contains: query, mode: 'insensitive' } },
+      { description: { contains: query, mode: 'insensitive' } },
+      { tags: { contains: query, mode: 'insensitive' } },
+      { state: { contains: query, mode: 'insensitive' } },
+      { area: { contains: query, mode: 'insensitive' } },
+    ];
   }
-}
 
-export default async function Home() {
-  const allListings = await getListings();
+  if (minPrice || maxPrice) {
+    whereClause.price = {};
+    if (minPrice) whereClause.price.gte = minPrice;
+    if (maxPrice) whereClause.price.lte = maxPrice;
+  }
 
-  const properties = allListings.filter(item => item.type === 'PROPERTY').slice(0, 4);
-  const vehicles = allListings.filter(item => item.type === 'VEHICLE').slice(0, 4);
+  if (brand) whereClause.brand = { contains: brand, mode: 'insensitive' };
+  if (year) whereClause.year = { gte: year };
+  if (bedrooms) whereClause.bedrooms = { gte: bedrooms };
+  if (propertyType) whereClause.propertyType = propertyType;
+
+  const listings = await prisma.listing.findMany({
+    where: whereClause,
+    include: { user: true },
+    orderBy: { createdAt: 'desc' }
+  });
 
   return (
-    <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className} selection:bg-blue-500 selection:text-white`}>
+    <div className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
-      {/* 1. NAVBAR */}
-      <Navbar />
-
-      {/* 2. HERO SECTION */}
-      <section className="relative h-[85vh] w-full flex items-center justify-center overflow-hidden">
-        <div className="absolute inset-0 z-0">
-           <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1600607686527-6fb886090705?q=80&w=2700&auto=format&fit=crop')] bg-cover bg-center grayscale opacity-30 scale-105 animate-[pulse_10s_ease-in-out_infinite]"></div>
-           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/40 to-black/20" />
-        </div>
-
-        <div className="relative z-10 text-center max-w-5xl px-6 pt-10">
-           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-blue-400 mb-6 font-bold">
-              The Future of Asset Trading
-           </p>
-           <h1 className={`text-6xl md:text-9xl text-white leading-[0.9] mb-8 ${serifFont.className}`}>
-             Beyond <br/> <span className="italic font-light text-gray-500">Luxury.</span>
-           </h1>
-           
-           {/* SEARCH BAR */}
-           <HeroSearch />
-
-        </div>
-      </section>
-
-      {/* 3. LISTINGS GRID */}
-      <section className="py-24 px-6 md:px-12 bg-[#0a0a0a] border-t border-white/10">
-         <div className="max-w-[1600px] mx-auto">
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 relative">
-                
-                <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-white/10 to-transparent"></div>
-
-                {/* LEFT: PROPERTIES */}
-                <div className="flex flex-col gap-8">
-                    <div className="flex justify-between items-end pb-4 border-b border-white/10">
-                        <div>
-                            <span className="text-xs font-bold uppercase tracking-widest text-blue-500 mb-2 block">Residences</span>
-                            <h3 className={`text-4xl text-white ${serifFont.className}`}>Latest Properties</h3>
-                        </div>
-                        <Link href="/search?type=PROPERTY" className="text-xs font-bold flex items-center gap-2 text-white hover:text-blue-500 transition-colors">
-                            SEE ALL <ArrowRight size={14}/>
-                        </Link>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {properties.length === 0 ? <p className="text-gray-600 italic">No properties listed yet.</p> : 
-                         properties.map((item) => <ListingCard key={item.id} item={item} icon={<BedDouble size={14}/>} />)
-                        }
-                    </div>
-                </div>
-
-                {/* RIGHT: VEHICLES */}
-                <div className="flex flex-col gap-8">
-                    <div className="flex justify-between items-end pb-4 border-b border-white/10">
-                        <div>
-                            <span className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-2 block">Supercars</span>
-                            <h3 className={`text-4xl text-white ${serifFont.className}`}>Latest Vehicles</h3>
-                        </div>
-                        <Link href="/search?type=VEHICLE" className="text-xs font-bold flex items-center gap-2 text-white hover:text-orange-500 transition-colors">
-                            SEE ALL <ArrowRight size={14}/>
-                        </Link>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {vehicles.length === 0 ? <p className="text-gray-600 italic">No vehicles listed yet.</p> : 
-                         vehicles.map((item) => <ListingCard key={item.id} item={item} icon={<Car size={14}/>} />)
-                        }
-                    </div>
-                </div>
-
-             </div>
-         </div>
-      </section>
-
-    </main>
-  );
-}
-
-// --- FIXED CARD COMPONENT ---
-function ListingCard({ item, icon }: { item: any, icon: any }) {
-    const priceDisplay = item.price > 0 
-        ? `RM ${item.price.toLocaleString()}` 
-        : "Contact for Price";
-    
-    const locationDisplay = item.area ? `${item.area}, ${item.state}` : item.state;
-
-    return (
-        <div className="group bg-neutral-900 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all duration-300 hover:shadow-[0_0_30px_-10px_rgba(37,99,235,0.3)] flex flex-col h-full relative">
-            
-            {/* FIX: Favorite Button is now OUTSIDE the Link, but positioned on top with CSS */}
-            <div className="absolute top-3 right-3 flex gap-2 z-20">
-                 <FavoriteButton listingId={item.id} />
-                 <div className="bg-black/60 backdrop-blur text-white p-2 rounded-full shadow-lg pointer-events-none">
-                    {icon}
-                 </div>
+      <nav className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/10 px-6 py-4 flex items-center gap-4">
+        <Link href="/" className="p-2 hover:bg-white/10 rounded-full transition-colors"><ArrowLeft size={20}/></Link>
+        <div className="flex flex-col">
+            <span className={`text-xl font-bold ${serifFont.className}`}>
+                {typeFilter === 'PROPERTY' ? 'Properties' : 'Vehicles'}
+            </span>
+            <div className="flex gap-2 text-xs">
+                {listingCategory && <span className="text-blue-400 font-bold uppercase">For {listingCategory}</span>}
+                {stateFilter && <span className="text-gray-400 font-bold uppercase">• {stateFilter}</span>}
             </div>
-
-            {/* The Link now only wraps the content, not the buttons */}
-            <Link href={`/listing/${item.id}`} className="flex flex-col h-full">
-                <div className="relative h-[240px] w-full overflow-hidden">
-                    <Image 
-                        src={item.images ? item.images.split(',')[0] : 'https://via.placeholder.com/400'} 
-                        alt={item.title} 
-                        fill 
-                        className="object-cover group-hover:scale-105 transition-transform duration-700" 
-                    />
-                    <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-                    <div className="absolute bottom-4 left-4">
-                        <p className="text-[10px] text-blue-400 uppercase tracking-wider mb-0.5 font-bold">Price</p>
-                        <p className="text-xl font-bold text-white font-serif tracking-wide">{priceDisplay}</p>
-                    </div>
-                </div>
-
-                <div className="p-5 flex flex-col flex-grow">
-                    <h4 className="text-base font-bold text-white mb-2 line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors">
-                        {item.title}
-                    </h4>
-                    
-                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/10">
-                        <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center font-bold text-[8px] text-white">
-                                {item.user?.name ? item.user.name.substring(0,2).toUpperCase() : 'AG'}
-                            </div>
-                            <div className="flex flex-col">
-                                <p className="text-xs text-gray-300 max-w-[100px] truncate font-bold">{item.user?.name || 'Agent'}</p>
-                                <p className="text-[10px] text-gray-500 flex items-center gap-1">
-                                    <MapPin size={10}/> {locationDisplay}
-                                </p>
-                            </div>
-                        </div>
-                        <div className="text-white/50 group-hover:text-green-400 transition-colors">
-                            <MessageCircle size={18}/>
-                        </div>
-                    </div>
-                </div>
-            </Link>
         </div>
-    );
+      </nav>
+
+      <div className="max-w-[1600px] mx-auto px-6 py-8 flex flex-col lg:flex-row gap-8">
+        
+        {/* FIX: WRAP CLIENT COMPONENT IN SUSPENSE */}
+        <Suspense fallback={<div className="w-full lg:w-80 h-96 bg-neutral-900 rounded-2xl animate-pulse"></div>}>
+             <FilterSidebar />
+        </Suspense>
+
+        <div className="flex-grow">
+            <p className="text-gray-400 text-sm mb-6">Found {listings.length} listings</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {listings.length === 0 ? (
+                    <div className="col-span-full py-20 text-center border-2 border-dashed border-white/10 rounded-2xl">
+                        <p className="text-gray-500 mb-2">No results found.</p>
+                        <Link href="/search" className="text-blue-500 hover:underline">Clear filters</Link>
+                    </div>
+                ) : listings.map((item) => (
+                    <div key={item.id} className="group bg-neutral-900 border border-white/5 rounded-xl overflow-hidden hover:border-blue-500/30 transition-all">
+                        <Link href={`/listing/${item.id}`}>
+                            <div className="relative h-[200px] w-full overflow-hidden">
+                                <Image 
+                                    src={item.images ? item.images.split(',')[0] : 'https://via.placeholder.com/400'} 
+                                    alt={item.title} 
+                                    fill 
+                                    className="object-cover group-hover:scale-105 transition-transform duration-700" 
+                                />
+                                <div className="absolute top-3 right-3 bg-black/60 backdrop-blur text-white p-1.5 rounded-full">
+                                    {item.type === 'PROPERTY' ? <BedDouble size={14}/> : <Car size={14}/>}
+                                </div>
+                                {item.listingCategory && (
+                                    <div className={`absolute top-3 left-3 text-[10px] font-bold px-2 py-1 rounded text-white ${item.listingCategory === 'SALE' ? 'bg-green-600' : 'bg-purple-600'}`}>
+                                        {item.listingCategory}
+                                    </div>
+                                )}
+                                <div className="absolute bottom-3 left-3">
+                                    <p className={`text-lg font-semibold text-white ${serifFont.className}`}>
+                                    RM {item.price.toLocaleString()}
+                                    </p>
+                                </div>
+                            </div>
+                        </Link>
+                        <div className="p-4">
+                            <h4 className="text-sm font-bold text-white mb-2 line-clamp-1">{item.title}</h4>
+                            <div className="flex gap-2 text-[10px] text-gray-400 uppercase tracking-wider mb-3">
+                                {item.type === 'VEHICLE' ? (
+                                    <><span>{item.year}</span> • <span>{item.bodyType}</span></>
+                                ) : (
+                                    <><span>{item.bedrooms} Beds</span> • <span>{item.propertyType}</span></>
+                                )}
+                            </div>
+                            <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs text-gray-500">
+                                <span className="flex items-center gap-1"><MapPin size={10}/> {item.state}</span>
+                                <span>{item.user?.name || 'Agent'}</span>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+      </div>
+    </div>
+  );
 }

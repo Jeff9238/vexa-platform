@@ -29,6 +29,7 @@ async function getAuthenticatedUser() {
 export async function analyzeImage(imageBase64: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    
     const prompt = `
       Analyze this image deeply. Is it a Property or a Vehicle?
       
@@ -90,6 +91,7 @@ export async function createListing(formData: FormData) {
     return val ? parseInt(val as string) : null;
   };
 
+  // Location & Map
   const area = formData.get('area') as string || "City";
   const state = formData.get('state') as string || "Malaysia";
   const locationName = formData.get('locationName') as string;
@@ -110,9 +112,9 @@ export async function createListing(formData: FormData) {
     images: formData.get('imageUrl') as string,
     condition: formData.get('condition') as string,
     
+    // Property
     listingCategory: formData.get('listingCategory') as string,
     facilities: formData.get('facilities') as string,
-
     bedrooms: getInt('bedrooms'),
     bathrooms: getInt('bathrooms'),
     carParks: getInt('carParks'),
@@ -120,6 +122,7 @@ export async function createListing(formData: FormData) {
     propertyType: formData.get('propertyType') as string,
     furnishing: formData.get('furnishing') as string,
 
+    // Vehicle
     brand: formData.get('brand') as string,
     model: formData.get('model') as string,
     variant: formData.get('variant') as string,
@@ -174,6 +177,7 @@ export async function updateListing(formData: FormData) {
     return val ? parseInt(val as string) : null;
   };
 
+  // Capture Location & Map Data
   const area = formData.get('area') as string;
   const state = formData.get('state') as string;
   const locationName = formData.get('locationName') as string;
@@ -196,6 +200,7 @@ export async function updateListing(formData: FormData) {
     tags: formData.get('tags') as string,
     condition: formData.get('condition') as string,
     
+    // Property
     listingCategory: formData.get('listingCategory') as string,
     facilities: formData.get('facilities') as string,
     bedrooms: getInt('bedrooms'),
@@ -205,6 +210,7 @@ export async function updateListing(formData: FormData) {
     propertyType: formData.get('propertyType') as string,
     furnishing: formData.get('furnishing') as string,
 
+    // Vehicle
     brand: formData.get('brand') as string,
     model: formData.get('model') as string,
     variant: formData.get('variant') as string,
@@ -231,7 +237,7 @@ export async function updateListing(formData: FormData) {
   return { success: true };
 }
 
-// --- ACTION F: TOGGLE FAVORITE (RESTORED) ---
+// --- ACTION F: TOGGLE FAVORITE ---
 export async function toggleFavorite(listingId: string) {
   try {
     const user = await getAuthenticatedUser();
@@ -260,7 +266,7 @@ export async function toggleFavorite(listingId: string) {
   }
 }
 
-// --- ACTION G: CHECK FAVORITE STATUS (RESTORED) ---
+// --- ACTION G: CHECK FAVORITE STATUS ---
 export async function getFavoriteStatus(listingId: string) {
   try {
     const clerkUser = await currentUser();

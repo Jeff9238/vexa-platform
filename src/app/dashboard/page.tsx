@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Image from "next/image";
 import Link from "next/link";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, Trash2, Wallet, Plus, Settings, Pencil, MapPin } from "lucide-react";
+import { ArrowLeft, Trash2, Wallet, Plus, Pencil, MapPin } from "lucide-react";
 import { deleteListing } from "../actions";
 import { currentUser } from "@clerk/nextjs/server"; 
 import { redirect } from "next/navigation";
@@ -142,7 +142,7 @@ export default async function Dashboard() {
                         {/* Actions: Edit & Delete */}
                         <div className="flex gap-2">
                             
-                            {/* NEW: Edit Button */}
+                            {/* Edit Button */}
                             <Link href={`/edit/${item.id}`} className="p-3 bg-blue-900/20 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all" title="Edit Listing">
                                 <Pencil size={20}/>
                             </Link>
