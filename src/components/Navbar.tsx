@@ -1,9 +1,10 @@
 'use client'
 
 import Link from "next/link";
+import Image from "next/image"; // <--- Added Image Import
 import { useState } from "react";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { Menu, ChevronDown, LayoutDashboard, Plus, Heart } from "lucide-react";
+import { Menu, ChevronDown, LayoutDashboard, Plus, Heart, Settings } from "lucide-react";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
@@ -16,9 +17,17 @@ export default function Navbar() {
     <nav className={`fixed top-0 w-full z-50 px-6 md:px-8 py-4 flex justify-between items-center bg-black/60 backdrop-blur-xl border-b border-white/5 transition-all ${sansFont.className}`}>
         
         {/* LEFT: LOGO */}
-        <Link href="/" className="flex items-center gap-2 cursor-pointer group z-20">
-           <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center font-bold text-white text-lg shadow-lg shadow-blue-900/50 group-hover:scale-105 transition-transform">V</div>
-           <span className={`text-2xl font-bold tracking-tighter text-white ${serifFont.className}`}>VEXA.</span>
+        <Link href="/" className="flex items-center gap-3 cursor-pointer group z-20">
+            {/* UPDATED: IMAGE LOGO */}
+            <div className="relative w-10 h-10 overflow-hidden rounded-xl shadow-lg shadow-blue-900/20 group-hover:scale-105 transition-transform border border-white/10">
+                <Image 
+                    src="/vexa.png" // <--- Make sure image is in 'public' folder
+                    alt="VEXA Logo" 
+                    fill 
+                    className="object-cover"
+                />
+            </div>
+            <span className={`text-2xl font-bold tracking-tighter text-white ${serifFont.className}`}>VEXA.</span>
         </Link>
 
         {/* MIDDLE: CATEGORY DROPDOWNS */}
@@ -51,7 +60,7 @@ export default function Navbar() {
                 )}
             </div>
 
-            {/* VEHICLES DROPDOWN (UPDATED TO BRANDS) */}
+            {/* VEHICLES DROPDOWN */}
             <div 
                 className="relative h-full flex items-center"
                 onMouseEnter={() => setActiveDropdown('VEHICLES')}
@@ -125,6 +134,11 @@ export default function Navbar() {
                    <button className="hidden md:flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-lg shadow-blue-600/20">
                      <Plus size={18}/> <span className="hidden lg:inline">Post</span>
                    </button>
+                </Link>
+
+                {/* SETTINGS LINK */}
+                <Link href="/settings" className="hidden md:flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-white hover:bg-white/5 transition-all border border-transparent hover:border-white/10 mr-2" title="Settings">
+                    <Settings size={20} />
                 </Link>
 
                 <div className="rounded-full ring-2 ring-white/10 hover:ring-white/30 transition-all p-0.5 ml-2">

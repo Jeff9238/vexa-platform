@@ -289,3 +289,84 @@ export async function getFavoriteStatus(listingId: string) {
     return false;
   }
 }
+// --- ACTION H: UPDATE USER PROFILE ---
+export async function updateProfile(formData: FormData) {
+  const user = await getAuthenticatedUser();
+
+  const phoneNumber = formData.get('phoneNumber') as string;
+  const bio = formData.get('bio') as string;
+  const website = formData.get('website') as string;
+  const profileImage = formData.get('profileImage') as string; // <--- NEW
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: {
+      phoneNumber,
+      bio,
+      website,
+      profileImage // <--- Save to DB
+    }
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath('/settings');
+  revalidatePath(`/agent/${user.id}`); // Update public profile
+  return { success: true };
+}
+
+// ... keep getUserProfile ...
+// --- ADMIN: CHECK PERMISSION ---
+async function checkAdmin() {
+  const user = await getAuthenticatedUser();
+  if (user.role !== 'ADMIN') {
+    throw new Error("Unauthorized: Admin Access Only");
+  }
+  return user;
+}
+
+// --- ADMIN: GET DASHBOARD DATA ---
+export async function getAdminData() {
+  await checkAdmin();
+
+  const totalUsers = await prisma.user.count();
+  const totalListings = await prisma.listing.count();
+  const recentUsers = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 5 });
+  
+  // Get all listings with user details for the table
+  const allListings = await prisma.listing.findMany({
+    include: { user: true },
+    orderBy: { createdAt: 'desc' },
+    take: 50 // Limit for MVP performance
+  });
+
+  const allUsers = await prisma.user.findMany({
+    orderBy: { createdAt: 'desc' },
+    take: 50
+  });
+
+  return { totalUsers, totalListings, recentUsers, allListings, allUsers };
+}
+
+// --- ADMIN: BAN USER ---
+export async function deleteUserAdmin(userId: string) {
+  await checkAdmin();
+  // Delete user and cascade their listings (handled by Prisma usually, or manual)
+  // Note: Prisma schema usually needs onDelete: Cascade on the relation
+  await prisma.user.delete({ where: { id: userId } });
+  revalidatePath('/admin');
+  return { success: true };
+}
+
+// --- ADMIN: FORCE DELETE LISTING ---
+export async function deleteListingAdmin(listingId: string) {
+  await checkAdmin();
+  await prisma.listing.delete({ where: { id: listingId } });
+  revalidatePath('/admin');
+  return { success: true };
+}
+
+// --- ACTION I: GET CURRENT USER PROFILE ---
+export async function getUserProfile() {
+  const user = await getAuthenticatedUser();
+  return user;
+}

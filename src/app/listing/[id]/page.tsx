@@ -1,50 +1,136 @@
-// Note: We switch to 'use client' for the main page wrapper to handle the Share button interaction easily,
-// while still fetching data via Server Actions/Prisma in a separate component pattern if needed.
-// BUT, for simplicity in this final step, we will keep it Server Component and just use a Client Wrapper for buttons.
-// Actually, to avoid complex refactoring now, we will just insert the Client Components (FavoriteButton) we already built.
-
 import { prisma } from "@/lib/prisma";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ImageIcon } from "lucide-react";
+import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import ImageGallery from "@/components/ImageGallery"; 
 import LocationMap from "@/components/LocationMap";
-import FavoriteButton from "@/components/FavoriteButton"; // Import Heart
-import { getFavoriteStatus } from "@/app/actions"; // Import Check Logic
+import FavoriteButton from "@/components/FavoriteButton"; 
+import LoanCalculator from "@/components/LoanCalculator"; 
+import BackButton from "@/components/BackButton"; 
+import { getFavoriteStatus } from "@/app/actions"; 
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
-export default async function ListingPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ListingPage({ 
+    params, 
+    searchParams 
+}: { 
+    params: Promise<{ id: string }>;
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   const { id } = await params;
-  const listing = await prisma.listing.findUnique({ where: { id }, include: { user: true } });
+  const sp = await searchParams; // Get Search Parameters (Filters)
+  
+  // 1. Fetch listing AND the user (agent) details
+  const listing = await prisma.listing.findUnique({ 
+      where: { id }, 
+      include: { user: true } 
+  });
+
   if (!listing) notFound();
+
+  // --- NAVIGATION LOGIC (NEXT/PREV) ---
+  // Reconstruct the search filter to find neighbors
+  const typeFilter = typeof sp.type === 'string' ? sp.type : listing.type;
+  
+  const whereClause: any = {
+    published: true,
+    type: typeFilter,
+  };
+
+  // Apply filters if they exist in URL (Consistency with Search Page)
+  if (sp.listingCategory) whereClause.listingCategory = sp.listingCategory;
+  if (sp.bodyType) whereClause.bodyType = sp.bodyType;
+  if (sp.state) whereClause.state = { equals: sp.state, mode: 'insensitive' };
+  if (sp.q) {
+    whereClause.OR = [
+        { title: { contains: sp.q as string, mode: 'insensitive' } },
+        { description: { contains: sp.q as string, mode: 'insensitive' } },
+        { tags: { contains: sp.q as string, mode: 'insensitive' } },
+    ];
+  }
+  const minPrice = sp.minPrice ? parseFloat(sp.minPrice as string) : undefined;
+  const maxPrice = sp.maxPrice ? parseFloat(sp.maxPrice as string) : undefined;
+  if (minPrice || maxPrice) {
+    whereClause.price = {};
+    if (minPrice) whereClause.price.gte = minPrice;
+    if (maxPrice) whereClause.price.lte = maxPrice;
+  }
+  if (sp.brand) whereClause.brand = { contains: sp.brand as string, mode: 'insensitive' };
+
+  // Fetch only IDs for navigation context
+  const contextListings = await prisma.listing.findMany({
+    where: whereClause,
+    select: { id: true },
+    orderBy: { createdAt: 'desc' },
+    take: 100 // Limit for performance, assuming users won't scroll 100+ deep
+  });
+
+  const currentIndex = contextListings.findIndex(x => x.id === listing.id);
+  const prevId = currentIndex > 0 ? contextListings[currentIndex - 1].id : null;
+  const nextId = currentIndex !== -1 && currentIndex < contextListings.length - 1 ? contextListings[currentIndex + 1].id : null;
+
+  // Build query string to preserve filters on navigation
+  const queryString = new URLSearchParams();
+  Object.entries(sp).forEach(([k, v]) => {
+      if (typeof v === 'string') queryString.set(k, v);
+  });
+  const queryStr = queryString.toString() ? `?${queryString.toString()}` : '';
+
+  // ------------------------------------
 
   const images = listing.images ? listing.images.split(',') : [];
   const heroImage = images[0] || 'https://via.placeholder.com/800';
-  
-  const whatsappUrl = `https://wa.me/?text=Hi, interested in ${listing.title}`;
   const facilities = listing.facilities ? listing.facilities.split(',') : [];
 
   // Check if current user liked this
   const isLiked = await getFavoriteStatus(id);
+
+  // --- CONTACT LOGIC ---
+  const phone = listing.user.phoneNumber ? listing.user.phoneNumber.replace(/[^0-9]/g, '') : '';
+  const whatsappUrl = phone 
+    ? `https://wa.me/${phone}?text=Hi ${listing.user.name}, I am interested in your listing on VEXA: ${listing.title}`
+    : `https://wa.me/?text=Hi, I am interested in ${listing.title}`;
 
   return (
     <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
       {/* NAV */}
       <nav className="fixed top-0 w-full z-50 bg-gradient-to-b from-black/80 to-transparent px-6 py-4 flex justify-between items-center pointer-events-none">
-        <Link href="/" className="flex gap-2 text-sm font-bold text-white bg-black/40 hover:bg-blue-600 px-4 py-2 rounded-full pointer-events-auto transition-all backdrop-blur-md border border-white/10"><ArrowLeft size={18}/> BACK</Link>
+        
+        <div className="flex items-center gap-4 pointer-events-auto">
+            {/* REPLACED LINK WITH BACK BUTTON COMPONENT */}
+            <BackButton />
+
+            {/* PREV / NEXT BUTTONS */}
+            {(prevId || nextId) && (
+                <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-full overflow-hidden">
+                    {prevId ? (
+                        <Link href={`/listing/${prevId}${queryStr}`} className="px-3 py-2 hover:bg-white/10 border-r border-white/10 text-white transition-colors" title="Previous Listing">
+                            <ChevronLeft size={18}/>
+                        </Link>
+                    ) : (
+                        <div className="px-3 py-2 text-gray-600 border-r border-white/10 cursor-not-allowed"><ChevronLeft size={18}/></div>
+                    )}
+                    
+                    {nextId ? (
+                        <Link href={`/listing/${nextId}${queryStr}`} className="px-3 py-2 hover:bg-white/10 text-white transition-colors" title="Next Listing">
+                            <ChevronRight size={18}/>
+                        </Link>
+                    ) : (
+                        <div className="px-3 py-2 text-gray-600 cursor-not-allowed"><ChevronRight size={18}/></div>
+                    )}
+                </div>
+            )}
+        </div>
         
         <div className="flex gap-3 pointer-events-auto">
-            {/* FAVORITE BUTTON (NEW) */}
             <div className="bg-black/40 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center w-10 h-10">
                 <FavoriteButton listingId={listing.id} initialLiked={isLiked} />
             </div>
-
-            {/* SHARE BUTTON */}
             <button className="w-10 h-10 bg-black/40 text-white rounded-full backdrop-blur-md hover:bg-white hover:text-black transition-all border border-white/10 flex items-center justify-center">
                 <Share2 size={18}/>
             </button>
@@ -56,7 +142,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
          <Image src={heroImage} alt={listing.title} fill className="object-cover" priority />
          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"/>
          
-         {/* Title Overlay */}
          <div className="absolute bottom-0 left-0 w-full px-6 md:px-12 pb-12 max-w-7xl mx-auto">
             <div className="flex gap-2 mb-4">
                 <span className="bg-orange-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">{listing.condition || 'USED'}</span>
@@ -82,24 +167,34 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-0.5">Price</p>
                       <div className="text-3xl md:text-4xl font-bold text-white font-serif">RM {listing.price.toLocaleString()}</div>
                   </div>
+                  
                   <div className="hidden md:block w-[1px] h-10 bg-white/10"></div>
+                  
+                  {/* AGENT PROFILE LINK */}
                   <div className="hidden md:flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-sm border border-white/20">
-                          {listing.user.name?.substring(0,2).toUpperCase()}
-                      </div>
-                      <div>
-                          <p className="text-sm font-bold text-white leading-none mb-1">{listing.user.name}</p>
-                          <p className="text-[10px] text-blue-400 font-bold flex items-center gap-1"><CheckCircle size={10}/> Verified Agent</p>
-                      </div>
+                      <Link href={`/agent/${listing.user.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity group">
+                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-sm border border-white/20 overflow-hidden relative">
+                              {listing.user.profileImage ? (
+                                  <Image src={listing.user.profileImage} alt="Agent" fill className="object-cover"/>
+                              ) : (
+                                  listing.user.name?.substring(0,2).toUpperCase()
+                              )}
+                          </div>
+                          <div>
+                              <p className="text-sm font-bold text-white leading-none mb-1 group-hover:text-blue-400 transition-colors">{listing.user.name}</p>
+                              <p className="text-[10px] text-blue-400 font-bold flex items-center gap-1"><CheckCircle size={10}/> Verified Agent</p>
+                          </div>
+                      </Link>
                   </div>
               </div>
+
               <div className="flex items-center gap-3 w-full md:w-auto">
-                  <a href={whatsappUrl} target="_blank" className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebc50] text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-green-900/20">
+                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebc50] text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-green-900/20">
                       <MessageCircle size={20}/> <span className="whitespace-nowrap">WhatsApp</span>
                   </a>
-                  <button className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-white hover:bg-gray-200 text-black px-8 py-3 rounded-xl font-bold transition-all">
-                      <Phone size={20}/> <span className="whitespace-nowrap">Call</span>
-                  </button>
+                  <a href={phone ? `tel:${phone}` : '#'} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold transition-all ${phone ? 'bg-white hover:bg-gray-200 text-black' : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'}`} title={phone ? "Call Now" : "Phone number not provided"}>
+                      <Phone size={20}/> <span className="whitespace-nowrap">{phone ? "Call" : "No Phone"}</span>
+                  </a>
               </div>
           </div>
       </div>
@@ -111,17 +206,17 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {listing.type === 'PROPERTY' ? (
                     <>
-                       <StatCard icon={<BedDouble size={24}/>} label="Bedrooms" value={listing.bedrooms}/>
-                       <StatCard icon={<Bath size={24}/>} label="Bathrooms" value={listing.bathrooms}/>
-                       <StatCard icon={<CarFront size={24}/>} label="Car Parks" value={listing.carParks}/>
-                       <StatCard icon={<Maximize size={24}/>} label="Size" value={`${listing.sqft} sqft`}/>
+                        <StatCard icon={<BedDouble size={24}/>} label="Bedrooms" value={listing.bedrooms}/>
+                        <StatCard icon={<Bath size={24}/>} label="Bathrooms" value={listing.bathrooms}/>
+                        <StatCard icon={<CarFront size={24}/>} label="Car Parks" value={listing.carParks}/>
+                        <StatCard icon={<Maximize size={24}/>} label="Size" value={`${listing.sqft} sqft`}/>
                     </>
                 ) : (
                     <>
-                       <StatCard icon={<Calendar size={24}/>} label="Year" value={listing.year}/>
-                       <StatCard icon={<Gauge size={24}/>} label="Mileage" value={`${listing.mileage} km`}/>
-                       <StatCard icon={<Settings2 size={24}/>} label="Trans." value={listing.transmission}/>
-                       <StatCard icon={<Fuel size={24}/>} label="Fuel" value={listing.fuelType}/>
+                        <StatCard icon={<Calendar size={24}/>} label="Year" value={listing.year}/>
+                        <StatCard icon={<Gauge size={24}/>} label="Mileage" value={`${listing.mileage} km`}/>
+                        <StatCard icon={<Settings2 size={24}/>} label="Trans." value={listing.transmission}/>
+                        <StatCard icon={<Fuel size={24}/>} label="Fuel" value={listing.fuelType}/>
                     </>
                 )}
             </div>
@@ -192,6 +287,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                     </div>
                 </div>
             )}
+
+            {/* LOAN CALCULATOR */}
+            <div>
+                <LoanCalculator price={listing.price} type={listing.type as 'PROPERTY' | 'VEHICLE'} />
+            </div>
 
       </div>
     </main>
