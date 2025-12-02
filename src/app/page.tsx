@@ -1,167 +1,152 @@
-import Image from "next/image";
-import Link from "next/link"; 
-import { Playfair_Display, Manrope } from 'next/font/google';
-import { Menu, BedDouble, Car, MessageCircle, ArrowRight, LayoutDashboard, Plus, MapPin, Heart } from "lucide-react"; 
 import { prisma } from "@/lib/prisma"; 
-import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs"; 
-import { currentUser } from "@clerk/nextjs/server"; // New Import
-import HeroSearch from "@/components/HeroSearch"; 
+import { currentUser } from "@clerk/nextjs/server"; 
+import { Playfair_Display, Manrope } from 'next/font/google';
 import Navbar from "@/components/Navbar"; 
-import FavoriteButton from "@/components/FavoriteButton"; 
+import HeroSearch from "@/components/HeroSearch"; 
+import CategoryIcons from "@/components/CategoryIcons"; // <--- NEW
+import ListingCarousel from "@/components/ListingCarousel"; // <--- NEW
+import NewsSection from "@/components/NewsSection"; // <--- NEW
+import TrustedAgents from "@/components/TrustedAgents"; // <--- NEW
+import Link from "next/link";
+import { Plus } from "lucide-react";
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
-// 1. Fetch All Listings
-async function getListings() {
-  try {
-    const listings = await prisma.listing.findMany({
-      where: { published: true },
-      include: { user: true },
-      orderBy: { createdAt: 'desc' }, 
-      take: 50 
-    });
-    return listings;
-  } catch (error) {
-    console.error("Database Error:", error);
-    return [];
-  }
-}
-
-// 2. Fetch User's Favorites (Only IDs)
+// Data Fetchers
 async function getMyFavorites() {
   try {
     const user = await currentUser();
     if (!user || !user.emailAddresses[0]) return [];
-
-    const email = user.emailAddresses[0].emailAddress;
     const dbUser = await prisma.user.findUnique({
-      where: { email },
+      where: { email: user.emailAddresses[0].emailAddress },
       include: { favorites: true }
     });
+    return dbUser ? dbUser.favorites.map(fav => fav.listingId) : [];
+  } catch { return []; }
+}
 
-    if (!dbUser) return [];
-    // Return array of Listing IDs: ["id1", "id2"]
-    return dbUser.favorites.map(fav => fav.listingId);
-  } catch {
-    return [];
-  }
+async function getHomePageData() {
+    const freshListings = await prisma.listing.findMany({
+        where: { published: true },
+        include: { user: true },
+        orderBy: { createdAt: 'desc' }, 
+        take: 10 
+    });
+
+    // "Premium" = Properties > 1M OR Vehicles > 200k
+    const premiumListings = await prisma.listing.findMany({
+        where: { 
+            published: true,
+            OR: [
+                { type: 'PROPERTY', price: { gte: 1000000 } },
+                { type: 'VEHICLE', price: { gte: 200000 } }
+            ]
+        },
+        include: { user: true },
+        orderBy: { price: 'desc' }, 
+        take: 10 
+    });
+
+    const activeAgents = await prisma.user.findMany({
+        where: { phoneNumber: { not: null } }, // Only show agents with contact info
+        take: 5
+    });
+
+    return { freshListings, premiumListings, activeAgents };
 }
 
 export default async function Home() {
-  const allListings = await getListings();
-  const myFavorites = await getMyFavorites(); // Fetch once
-
-  const properties = allListings.filter(item => item.type === 'PROPERTY').slice(0, 4);
-  const vehicles = allListings.filter(item => item.type === 'VEHICLE').slice(0, 4);
+  const { freshListings, premiumListings, activeAgents } = await getHomePageData();
+  const myFavorites = await getMyFavorites(); 
 
   return (
     <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className} selection:bg-blue-500 selection:text-white`}>
       
       <Navbar />
 
-      {/* HERO SECTION */}
-      <section className="relative h-[85vh] w-full flex items-center justify-center overflow-hidden">
+      {/* 1. HERO SECTION (Redesigned) */}
+      <section className="relative h-[650px] w-full flex items-center justify-center overflow-hidden">
         <div className="absolute inset-0 z-0">
            <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1600607686527-6fb886090705?q=80&w=2700&auto=format&fit=crop')] bg-cover bg-center grayscale opacity-30 scale-105 animate-[pulse_10s_ease-in-out_infinite]"></div>
-           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/40 to-black/20" />
+           <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-black/30" />
         </div>
-        <div className="relative z-10 text-center max-w-5xl px-6 pt-10">
-           <p className="text-xs md:text-sm uppercase tracking-[0.3em] text-blue-400 mb-6 font-bold">The Future of Asset Trading</p>
-           <h1 className={`text-6xl md:text-9xl text-white leading-[0.9] mb-8 ${serifFont.className}`}>Beyond <br/> <span className="italic font-light text-gray-500">Luxury.</span></h1>
+        
+        <div className="relative z-10 text-center max-w-5xl px-6 w-full mt-16">
+           <h1 className={`text-5xl md:text-7xl text-white leading-tight mb-6 ${serifFont.className}`}>
+               Find Your <span className="text-blue-500 italic">VEXA.</span>
+           </h1>
+           <p className="text-gray-300 mb-8 text-lg max-w-2xl mx-auto hidden md:block">
+               The premier marketplace for luxury properties and high-performance vehicles in Malaysia.
+           </p>
+           
            <HeroSearch />
+           
+           <div className="mt-6 flex justify-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest">
+               <span>Trending:</span>
+               <Link href="/search?q=KLCC" className="hover:text-white transition-colors">KLCC</Link>
+               <Link href="/search?q=BMW" className="hover:text-white transition-colors">BMW</Link>
+               <Link href="/search?q=Mont%20Kiara" className="hover:text-white transition-colors">Mont Kiara</Link>
+               <Link href="/search?q=Porsche" className="hover:text-white transition-colors">Porsche</Link>
+           </div>
         </div>
       </section>
 
-      {/* LISTINGS GRID */}
-      <section className="py-24 px-6 md:px-12 bg-[#0a0a0a] border-t border-white/10">
-         <div className="max-w-[1600px] mx-auto">
-             <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 relative">
-                <div className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-[1px] bg-gradient-to-b from-transparent via-white/10 to-transparent"></div>
+      {/* 2. QUICK ACCESS ICONS */}
+      <CategoryIcons />
 
-                {/* LEFT: PROPERTIES */}
-                <div className="flex flex-col gap-8">
-                    <div className="flex justify-between items-end pb-4 border-b border-white/10">
-                        <div><span className="text-xs font-bold uppercase tracking-widest text-blue-500 mb-2 block">Residences</span><h3 className={`text-4xl text-white ${serifFont.className}`}>Latest Properties</h3></div>
-                        <Link href="/search?type=PROPERTY" className="text-xs font-bold flex items-center gap-2 text-white hover:text-blue-500 transition-colors">SEE ALL <ArrowRight size={14}/></Link>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {properties.length === 0 ? <p className="text-gray-600 italic">No properties listed yet.</p> : 
-                         properties.map((item) => (
-                            <ListingCard 
-                                key={item.id} 
-                                item={item} 
-                                icon={<BedDouble size={14}/>} 
-                                isLiked={myFavorites.includes(item.id)} // Pass Liked Status
-                            />
-                         ))
-                        }
-                    </div>
-                </div>
+      {/* 3. PREMIUM COLLECTION CAROUSEL */}
+      <ListingCarousel 
+        title="The VEXA Collection" 
+        subtitle="Exclusive listings curated for the discerning few."
+        link="/search?minPrice=1000000"
+        items={premiumListings}
+        myFavs={myFavorites}
+      />
 
-                {/* RIGHT: VEHICLES */}
-                <div className="flex flex-col gap-8">
-                    <div className="flex justify-between items-end pb-4 border-b border-white/10">
-                        <div><span className="text-xs font-bold uppercase tracking-widest text-orange-500 mb-2 block">Supercars</span><h3 className={`text-4xl text-white ${serifFont.className}`}>Latest Vehicles</h3></div>
-                        <Link href="/search?type=VEHICLE" className="text-xs font-bold flex items-center gap-2 text-white hover:text-orange-500 transition-colors">SEE ALL <ArrowRight size={14}/></Link>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {vehicles.length === 0 ? <p className="text-gray-600 italic">No vehicles listed yet.</p> : 
-                         vehicles.map((item) => (
-                            <ListingCard 
-                                key={item.id} 
-                                item={item} 
-                                icon={<Car size={14}/>} 
-                                isLiked={myFavorites.includes(item.id)} // Pass Liked Status
-                            />
-                         ))
-                        }
-                    </div>
-                </div>
-             </div>
-         </div>
-      </section>
+      {/* 4. FRESH DROPS CAROUSEL */}
+      <ListingCarousel 
+        title="Fresh on Market" 
+        subtitle="Be the first to view the latest arrivals."
+        link="/search"
+        items={freshListings}
+        myFavs={myFavorites}
+      />
+
+      {/* 5. CTA BANNER */}
+      <div className="py-12 px-6">
+          <div className="max-w-[1600px] mx-auto bg-gradient-to-r from-blue-900 to-black border border-white/10 rounded-3xl p-12 relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
+              <div className="relative z-10">
+                  <h3 className={`text-3xl font-bold mb-2 ${serifFont.className}`}>Have an asset to sell?</h3>
+                  <p className="text-blue-200">Join thousands of agents and owners on VEXA today.</p>
+              </div>
+              <div className="relative z-10">
+                  <Link href="/post" className="bg-white text-blue-900 hover:bg-gray-100 px-8 py-4 rounded-xl font-bold flex items-center gap-2 transition-all shadow-xl shadow-black/20">
+                      <Plus size={20}/> Post Your Ad Free
+                  </Link>
+              </div>
+              
+              {/* Background Decor */}
+              <div className="absolute -right-20 -top-40 w-96 h-96 bg-blue-500/20 blur-[100px] rounded-full pointer-events-none"></div>
+          </div>
+      </div>
+
+      {/* 6. NEWS SECTION */}
+      <NewsSection />
+
+      {/* 7. TRUSTED AGENTS */}
+      <TrustedAgents agents={activeAgents} />
+
+      {/* FOOTER */}
+      <footer className="py-12 text-center text-gray-600 text-xs border-t border-white/5 bg-black">
+          <p className="mb-2">&copy; 2025 VEXA Marketplace. All Rights Reserved.</p>
+          <div className="flex justify-center gap-4">
+              <Link href="#" className="hover:text-gray-400">Privacy Policy</Link>
+              <Link href="#" className="hover:text-gray-400">Terms of Service</Link>
+              <Link href="#" className="hover:text-gray-400">Contact Support</Link>
+          </div>
+      </footer>
+
     </main>
   );
-}
-
-// --- UPDATED CARD COMPONENT ---
-function ListingCard({ item, icon, isLiked }: { item: any, icon: any, isLiked: boolean }) {
-    const priceDisplay = item.price > 0 ? `RM ${item.price.toLocaleString()}` : "Contact for Price";
-    const locationDisplay = item.area ? `${item.area}, ${item.state}` : item.state;
-
-    return (
-        <div className="group bg-neutral-900 border border-white/10 rounded-xl overflow-hidden hover:border-blue-500/50 transition-all duration-300 hover:shadow-[0_0_30px_-10px_rgba(37,99,235,0.3)] flex flex-col h-full relative">
-            
-            {/* Favorite Button (Outside Link) */}
-            <div className="absolute top-3 right-3 flex gap-2 z-20">
-                 <FavoriteButton listingId={item.id} initialLiked={isLiked} />
-                 <div className="bg-black/60 backdrop-blur text-white p-2 rounded-full shadow-lg pointer-events-none">{icon}</div>
-            </div>
-
-            <Link href={`/listing/${item.id}`} className="flex flex-col h-full">
-                <div className="relative h-[240px] w-full overflow-hidden">
-                    <Image src={item.images ? item.images.split(',')[0] : 'https://via.placeholder.com/400'} alt={item.title} fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
-                    <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
-                    <div className="absolute bottom-4 left-4">
-                        <p className="text-[10px] text-blue-400 uppercase tracking-wider mb-0.5 font-bold">Price</p>
-                        <p className="text-xl font-bold text-white font-serif tracking-wide">{priceDisplay}</p>
-                    </div>
-                </div>
-                <div className="p-5 flex flex-col flex-grow">
-                    <h4 className="text-base font-bold text-white mb-2 line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors">{item.title}</h4>
-                    <div className="mt-auto flex items-center justify-between pt-4 border-t border-white/10">
-                        <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center font-bold text-[8px] text-white">{item.user?.name ? item.user.name.substring(0,2).toUpperCase() : 'AG'}</div>
-                            <div className="flex flex-col">
-                                <p className="text-xs text-gray-300 max-w-[100px] truncate font-bold">{item.user?.name || 'Agent'}</p>
-                                <p className="text-[10px] text-gray-500 flex items-center gap-1"><MapPin size={10}/> {locationDisplay}</p>
-                            </div>
-                        </div>
-                        <div className="text-white/50 group-hover:text-green-400 transition-colors"><MessageCircle size={18}/></div>
-                    </div>
-                </div>
-            </Link>
-        </div>
-    );
 }

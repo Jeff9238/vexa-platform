@@ -3,12 +3,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { MapPin, Share2, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
+import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import ImageGallery from "@/components/ImageGallery"; 
 import LocationMap from "@/components/LocationMap";
 import FavoriteButton from "@/components/FavoriteButton"; 
 import LoanCalculator from "@/components/LoanCalculator"; 
-import { getFavoriteStatus } from "@/app/actions"; 
+import { getFavoriteStatus, incrementView } from "@/app/actions"; // <--- Added incrementView
 import SearchInput from "@/components/SearchInput"; 
 import { Suspense } from "react"; 
 
@@ -25,6 +25,7 @@ export default async function ListingPage({
   const { id } = await params;
   const sp = await searchParams;
   
+  // 1. Fetch listing AND the user (agent) details
   const listing = await prisma.listing.findUnique({ 
       where: { id }, 
       include: { user: true } 
@@ -32,9 +33,16 @@ export default async function ListingPage({
 
   if (!listing) notFound();
 
-  // --- NAVIGATION LOGIC ---
+  // 2. Track View (Analytics)
+  await incrementView(id);
+
+  // --- NAVIGATION LOGIC (NEXT/PREV) ---
   const typeFilter = typeof sp.type === 'string' ? sp.type : listing.type;
-  const whereClause: any = { published: true, type: typeFilter };
+  
+  const whereClause: any = {
+    published: true,
+    type: typeFilter,
+  };
 
   if (sp.listingCategory) whereClause.listingCategory = sp.listingCategory;
   if (sp.bodyType) whereClause.bodyType = sp.bodyType;
@@ -46,7 +54,15 @@ export default async function ListingPage({
         { tags: { contains: sp.q as string, mode: 'insensitive' } },
     ];
   }
-  
+  const minPrice = sp.minPrice ? parseFloat(sp.minPrice as string) : undefined;
+  const maxPrice = sp.maxPrice ? parseFloat(sp.maxPrice as string) : undefined;
+  if (minPrice || maxPrice) {
+    whereClause.price = {};
+    if (minPrice) whereClause.price.gte = minPrice;
+    if (maxPrice) whereClause.price.lte = maxPrice;
+  }
+  if (sp.brand) whereClause.brand = { contains: sp.brand as string, mode: 'insensitive' };
+
   const contextListings = await prisma.listing.findMany({
     where: whereClause,
     select: { id: true },
@@ -63,11 +79,12 @@ export default async function ListingPage({
       if (typeof v === 'string') queryString.set(k, v);
   });
   const queryStr = queryString.toString() ? `?${queryString.toString()}` : '';
-  // ------------------------
+  // ------------------------------------
 
   const images = listing.images ? listing.images.split(',') : [];
   const heroImage = images[0] || 'https://via.placeholder.com/800';
   const facilities = listing.facilities ? listing.facilities.split(',') : [];
+
   const isLiked = await getFavoriteStatus(id);
 
   const phone = listing.user.phoneNumber ? listing.user.phoneNumber.replace(/[^0-9]/g, '') : '';
@@ -78,7 +95,8 @@ export default async function ListingPage({
   return (
     <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
-      {/* CUSTOM LISTING HEADER (Restored) */}
+      {/* CUSTOM LISTING HEADER */}
+      {/* z-[100] ensures it sits on top of everything including global nav */}
       <nav className="fixed top-0 w-full z-[100] px-4 md:px-6 py-4 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/10">
         
         {/* LEFT: VEXA LOGO (Back to Home) */}
@@ -112,13 +130,13 @@ export default async function ListingPage({
         </div>
       </nav>
 
-      {/* 1. HERO IMAGE */}
+      {/* 1. HERO IMAGE & NAVIGATION */}
       <div className="relative w-full h-[65vh] group">
          <Image src={heroImage} alt={listing.title} fill className="object-cover" priority />
          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"/>
          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent opacity-60"/>
 
-         {/* NEXT / PREV BUTTONS */}
+         {/* --- PREVIOUS / NEXT FLOATING BUTTONS --- */}
          {prevId && (
              <Link href={`/listing/${prevId}${queryStr}`} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full border border-white/10 transition-all hover:scale-110 opacity-0 group-hover:opacity-100" title="Previous Listing">
                  <ChevronLeft size={24}/>
@@ -188,6 +206,7 @@ export default async function ListingPage({
 
       {/* 3. MAIN CONTENT */}
       <div className="max-w-5xl mx-auto px-6 py-12 space-y-16">
+        
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {listing.type === 'PROPERTY' ? (
                     <>

@@ -17,12 +17,10 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 
-  // --- FIX: HIDE GLOBAL NAVBAR ON LISTING PAGES ---
-  // The listing page has its own custom header with Share/Favorite buttons.
+  // Hide Global Navbar on Listing Pages (they have their own custom header)
   if (pathname?.startsWith('/listing/')) {
       return null;
   }
-  // ------------------------------------------------
 
   return (
     <>
@@ -79,9 +77,15 @@ export default function Navbar() {
                 </SignedOut>
 
                 <SignedIn>
-                    <Link href="/favorites" className="hidden md:flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-red-500 hover:bg-white/5 transition-all">
+                    <Link href="/favorites" className="hidden md:flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-red-500 hover:bg-white/5 transition-all" title="Favorites">
                         <Heart size={20} />
                     </Link>
+
+                    {/* --- RESTORED DASHBOARD BUTTON --- */}
+                    <Link href="/dashboard" className="hidden md:flex items-center gap-2 text-gray-300 font-bold text-sm hover:text-white transition-colors bg-white/5 px-4 py-2.5 rounded-full border border-white/5 hover:border-white/20">
+                        <LayoutDashboard size={16}/> <span className="hidden lg:inline">Dashboard</span>
+                    </Link>
+                    {/* ---------------------------------- */}
 
                     <Link href="/post" className="hidden md:flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-5 py-2.5 rounded-full text-sm font-bold transition-all shadow-lg shadow-blue-600/20">
                         <Plus size={18}/> <span className="hidden lg:inline">Post</span>
@@ -128,6 +132,7 @@ export default function Navbar() {
                 <SignedIn>
                     <div className="space-y-4 mt-4">
                         <p className="text-xs text-gray-500 uppercase tracking-widest font-bold border-b border-white/10 pb-2">Account</p>
+                        {/* Dashboard Link in Mobile Menu */}
                         <Link href="/dashboard" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 hover:text-white transition-colors">
                             <LayoutDashboard size={24}/> Dashboard
                         </Link>

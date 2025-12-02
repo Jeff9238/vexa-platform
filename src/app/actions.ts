@@ -7,25 +7,32 @@ import { revalidatePath } from "next/cache";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// --- HELPER: Get User ---
+// --- HELPER: Get Authenticated User ---
 async function getAuthenticatedUser() {
   const clerkUser = await currentUser();
   if (!clerkUser || !clerkUser.emailAddresses[0]) throw new Error("Please log in.");
 
   const email = clerkUser.emailAddresses[0].emailAddress;
   const name = clerkUser.firstName + " " + clerkUser.lastName;
+  const imageUrl = clerkUser.imageUrl;
 
   let dbUser = await prisma.user.findUnique({ where: { email } });
 
   if (!dbUser) {
     dbUser = await prisma.user.create({
-      data: { email, name: name || "New User", role: "USER", credits: 10 }
+      data: { 
+          email, 
+          name: name || "New User", 
+          role: "USER", 
+          credits: 10,
+          profileImage: imageUrl // Default to Clerk image initially
+      }
     });
   }
   return dbUser;
 }
 
-// --- ACTION A: ANALYZE IMAGE ---
+// --- ACTION A: ANALYZE IMAGE (GEMINI AI) ---
 export async function analyzeImage(imageBase64: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -157,10 +164,16 @@ export async function createListing(formData: FormData) {
 
 // --- ACTION C: DELETE LISTING ---
 export async function deleteListing(id: string) {
-  await prisma.listing.delete({ where: { id } });
-  revalidatePath('/');
-  revalidatePath('/dashboard');
-  return { success: true };
+  const user = await getAuthenticatedUser();
+  // Ensure user owns listing (simple check)
+  const listing = await prisma.listing.findUnique({ where: { id } });
+  if (listing && listing.userId === user.id) {
+      await prisma.listing.delete({ where: { id } });
+      revalidatePath('/');
+      revalidatePath('/dashboard');
+      return { success: true };
+  }
+  return { success: false, error: "Unauthorized" };
 }
 
 // --- ACTION D: GET LISTING ---
@@ -171,7 +184,12 @@ export async function getListing(id: string) {
 // --- ACTION E: UPDATE LISTING ---
 export async function updateListing(formData: FormData) {
   const id = formData.get('id') as string;
+  const user = await getAuthenticatedUser();
   
+  // Verify ownership
+  const existing = await prisma.listing.findUnique({ where: { id } });
+  if (!existing || existing.userId !== user.id) throw new Error("Unauthorized");
+
   const getInt = (key: string) => {
     const val = formData.get(key);
     return val ? parseInt(val as string) : null;
@@ -289,6 +307,7 @@ export async function getFavoriteStatus(listingId: string) {
     return false;
   }
 }
+
 // --- ACTION H: UPDATE USER PROFILE ---
 export async function updateProfile(formData: FormData) {
   const user = await getAuthenticatedUser();
@@ -296,7 +315,7 @@ export async function updateProfile(formData: FormData) {
   const phoneNumber = formData.get('phoneNumber') as string;
   const bio = formData.get('bio') as string;
   const website = formData.get('website') as string;
-  const profileImage = formData.get('profileImage') as string; // <--- NEW
+  const profileImage = formData.get('profileImage') as string;
 
   await prisma.user.update({
     where: { id: user.id },
@@ -304,17 +323,22 @@ export async function updateProfile(formData: FormData) {
       phoneNumber,
       bio,
       website,
-      profileImage // <--- Save to DB
+      profileImage
     }
   });
 
   revalidatePath('/dashboard');
   revalidatePath('/settings');
-  revalidatePath(`/agent/${user.id}`); // Update public profile
+  revalidatePath(`/agent/${user.id}`);
   return { success: true };
 }
 
-// ... keep getUserProfile ...
+// --- ACTION I: GET CURRENT USER PROFILE ---
+export async function getUserProfile() {
+  const user = await getAuthenticatedUser();
+  return user;
+}
+
 // --- ADMIN: CHECK PERMISSION ---
 async function checkAdmin() {
   const user = await getAuthenticatedUser();
@@ -332,11 +356,10 @@ export async function getAdminData() {
   const totalListings = await prisma.listing.count();
   const recentUsers = await prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 5 });
   
-  // Get all listings with user details for the table
   const allListings = await prisma.listing.findMany({
     include: { user: true },
     orderBy: { createdAt: 'desc' },
-    take: 50 // Limit for MVP performance
+    take: 50 
   });
 
   const allUsers = await prisma.user.findMany({
@@ -350,8 +373,7 @@ export async function getAdminData() {
 // --- ADMIN: BAN USER ---
 export async function deleteUserAdmin(userId: string) {
   await checkAdmin();
-  // Delete user and cascade their listings (handled by Prisma usually, or manual)
-  // Note: Prisma schema usually needs onDelete: Cascade on the relation
+  // Ensure related records (listings/favorites) are handled by onDelete:Cascade in Prisma schema
   await prisma.user.delete({ where: { id: userId } });
   revalidatePath('/admin');
   return { success: true };
@@ -365,8 +387,53 @@ export async function deleteListingAdmin(listingId: string) {
   return { success: true };
 }
 
-// --- ACTION I: GET CURRENT USER PROFILE ---
-export async function getUserProfile() {
-  const user = await getAuthenticatedUser();
-  return user;
+// --- ANALYTICS: INCREMENT VIEW ---
+export async function incrementView(id: string) {
+  await prisma.listing.update({
+    where: { id },
+    data: { views: { increment: 1 } }
+  });
+}
+
+// --- ANALYTICS: INCREMENT CONTACT CLICK ---
+export async function trackContact(id: string, type: 'WHATSAPP' | 'CALL') {
+  if (type === 'WHATSAPP') {
+    await prisma.listing.update({ where: { id }, data: { whatsappClicks: { increment: 1 } } });
+  } else {
+    await prisma.listing.update({ where: { id }, data: { callClicks: { increment: 1 } } });
+  }
+  return { success: true };
+}
+
+// --- AI COACH: GET IMPROVEMENT TIPS ---
+export async function getListingTips(listingId: string) {
+  const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+  if (!listing) return [];
+
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    
+    const prompt = `
+      Act as a professional real estate and automotive sales coach.
+      Analyze this listing and provide 3 specific, short actionable tips to improve its sell-through rate.
+      
+      Listing Data:
+      - Title: ${listing.title}
+      - Price: ${listing.price}
+      - Description: ${listing.description}
+      - Images Count: ${listing.images ? listing.images.split(',').length : 0}
+      - Type: ${listing.type}
+      - Stats: ${listing.views} views, ${listing.whatsappClicks + listing.callClicks} leads.
+
+      Return ONLY a JSON array of strings. Example: ["Add more photos", "Price is 10% above market avg", "Mention warranty in description"]
+    `;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().replace(/```json|```/g, '').trim();
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("AI Tips Error:", e);
+    return ["Add high-quality photos.", "Write a more detailed description.", "Check your price against competitors."];
+  }
 }

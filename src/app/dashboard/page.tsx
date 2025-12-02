@@ -2,24 +2,21 @@ import { prisma } from "@/lib/prisma";
 import Image from "next/image";
 import Link from "next/link";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, Trash2, Wallet, Plus, Pencil, MapPin } from "lucide-react";
+import { ArrowLeft, Trash2, Wallet, Plus, Pencil, MapPin, Eye, MessageCircle, Phone, TrendingUp, Car, Home } from "lucide-react";
 import { deleteListing } from "../actions";
 import { currentUser } from "@clerk/nextjs/server"; 
 import { redirect } from "next/navigation";
+import AICoachModal from "@/components/AICoachModal"; 
 
-// Fonts
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
 export default async function Dashboard() {
-  
-  // 1. Get Logged In User from Clerk
   const clerkUser = await currentUser();
   if (!clerkUser) return redirect("/sign-in");
 
   const email = clerkUser.emailAddresses[0].emailAddress;
 
-  // 2. Find them in Our Database (Supabase)
   const me = await prisma.user.findUnique({
     where: { email: email },
     include: {
@@ -29,18 +26,15 @@ export default async function Dashboard() {
     }
   });
 
-  // If user signed up but hasn't been synced to DB yet
-  if (!me) {
-    return (
-        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-10 text-center">
-            <h2 className="text-2xl font-bold mb-4">Welcome to VEXA!</h2>
-            <p className="mb-8 text-gray-400">Your profile is being initialized.</p>
-            <Link href="/post" className="bg-blue-600 px-6 py-3 rounded-xl font-bold hover:bg-blue-500">
-                Create your first post to finish setup
-            </Link>
-        </div>
-    );
-  }
+  if (!me) return redirect("/post");
+
+  // Separate Listings
+  const properties = me.listings.filter(l => l.type === 'PROPERTY');
+  const vehicles = me.listings.filter(l => l.type === 'VEHICLE');
+
+  // Calculate Total Stats
+  const totalViews = me.listings.reduce((acc, l) => acc + l.views, 0);
+  const totalLeads = me.listings.reduce((acc, l) => acc + l.whatsappClicks + l.callClicks, 0);
 
   return (
     <div className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className} p-6`}>
@@ -51,30 +45,16 @@ export default async function Dashboard() {
             <ArrowLeft size={20}/> Back to Home
         </Link>
         <h1 className={`text-2xl font-bold ${serifFont.className}`}>Agent Dashboard</h1>
-        
-        {/* Profile Picture */}
         <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden border border-white/20">
-            <img src={clerkUser.imageUrl} alt="Profile" className="w-full h-full object-cover"/>
+            <img src={me.profileImage || clerkUser.imageUrl} alt="Profile" className="w-full h-full object-cover"/>
         </div>
       </header>
 
       <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* LEFT COLUMN: PROFILE & WALLET */}
+        {/* LEFT: STATS & WALLET */}
         <div className="space-y-6">
             
-            {/* Identity Card */}
-            <div className="bg-neutral-900 border border-white/10 rounded-3xl p-6 text-center">
-                <div className="w-24 h-24 mx-auto bg-blue-600 rounded-full flex items-center justify-center p-1 mb-4 shadow-xl shadow-blue-900/20 overflow-hidden">
-                    <img src={clerkUser.imageUrl} alt="User" className="rounded-full w-full h-full object-cover" />
-                </div>
-                <h2 className="text-xl font-bold">{me.name}</h2>
-                <p className="text-gray-500 text-sm mb-6">{me.email}</p>
-                <div className="inline-block px-4 py-1 bg-green-900/30 text-green-400 text-xs font-bold rounded-full border border-green-500/30">
-                    VERIFIED AGENT
-                </div>
-            </div>
-
             {/* Wallet Card */}
             <div className="bg-gradient-to-br from-blue-900 to-slate-900 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-32 bg-blue-500/20 blur-3xl rounded-full pointer-events-none"></div>
@@ -85,85 +65,140 @@ export default async function Dashboard() {
                     {me.credits}
                 </div>
                 <div className="flex gap-2">
-                    <button className="flex-1 bg-white text-blue-900 font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors">
+                    <button className="flex-1 bg-white/10 text-white font-bold py-3 rounded-xl hover:bg-white/20 transition-colors">
                         Top Up
                     </button>
-                    <Link href="/post" className="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-500 transition-colors text-center flex items-center justify-center gap-2">
+                    <Link href="/post" className="flex-1 bg-white text-blue-900 font-bold py-3 rounded-xl hover:bg-gray-200 transition-colors text-center flex items-center justify-center gap-2">
                         <Plus size={18}/> Post Ad
                     </Link>
                 </div>
-                <p className="text-[10px] text-blue-300/50 mt-4 text-center">
-                    Each post deducts 5 Credits.
-                </p>
+            </div>
+
+            {/* Total Performance */}
+            <div className="bg-neutral-900 border border-white/10 rounded-3xl p-6">
+                <h3 className="text-gray-500 text-xs font-bold uppercase tracking-widest mb-6">Performance Overview</h3>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="p-4 bg-black rounded-2xl border border-white/5">
+                        <div className="text-blue-500 mb-2"><Eye size={20}/></div>
+                        <div className="text-2xl font-bold text-white">{totalViews}</div>
+                        <div className="text-xs text-gray-500">Total Views</div>
+                    </div>
+                    <div className="p-4 bg-black rounded-2xl border border-white/5">
+                        <div className="text-green-500 mb-2"><TrendingUp size={20}/></div>
+                        <div className="text-2xl font-bold text-white">{totalLeads}</div>
+                        <div className="text-xs text-gray-500">Total Leads</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        {/* RIGHT COLUMN: LISTINGS LIST */}
-        <div className="lg:col-span-2">
-            <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-                My Active Listings <span className="text-sm bg-neutral-800 px-2 py-0.5 rounded-full text-gray-400">{me.listings.length}</span>
-            </h3>
+        {/* RIGHT: SEPARATED LISTINGS */}
+        <div className="lg:col-span-2 space-y-12">
+            
+            {/* 1. PROPERTIES SECTION */}
+            <div>
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-blue-900/30 text-blue-400 rounded-lg"><Home size={20}/></div>
+                    <h3 className="text-xl font-bold">Property Listings <span className="text-sm text-gray-500 ml-2">({properties.length})</span></h3>
+                </div>
 
-            <div className="space-y-4">
-                {me.listings.length === 0 ? (
-                    <div className="p-12 border-2 border-dashed border-neutral-800 rounded-2xl text-center text-gray-500">
-                        You haven't posted anything yet.
-                    </div>
-                ) : me.listings.map((item) => (
-                    <div key={item.id} className="bg-neutral-900 border border-white/5 p-4 rounded-2xl flex gap-4 items-center group hover:border-white/20 transition-all">
-                        
-                        {/* Thumbnail */}
-                        <div className="relative w-24 h-24 bg-neutral-800 rounded-xl overflow-hidden flex-shrink-0">
-                            <Image 
-                                src={item.images ? item.images.split(',')[0] : 'https://via.placeholder.com/150'} 
-                                alt="Thumb" 
-                                fill 
-                                className="object-cover"
-                            />
+                <div className="space-y-4">
+                    {properties.length === 0 ? (
+                        <div className="p-8 border border-white/5 bg-white/5 rounded-2xl text-center text-gray-500 text-sm">
+                            No properties listed yet.
                         </div>
-
-                        {/* Info */}
-                        <div className="flex-grow min-w-0">
-                            <h4 className="font-bold text-lg line-clamp-1 text-white">{item.title}</h4>
-                            <p className="text-blue-400 font-bold text-sm">RM {item.price.toLocaleString()}</p>
-                            
-                            <div className="flex flex-wrap gap-2 mt-2">
-                                <span className="text-[10px] bg-white/5 px-2 py-1 rounded text-gray-400 uppercase font-bold">
-                                    {item.type}
-                                </span>
-                                {item.location && (
-                                    <span className="text-[10px] flex items-center gap-1 text-gray-500">
-                                        <MapPin size={10}/> {item.location}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-
-                        {/* Actions: Edit & Delete */}
-                        <div className="flex gap-2">
-                            
-                            {/* Edit Button */}
-                            <Link href={`/edit/${item.id}`} className="p-3 bg-blue-900/20 text-blue-500 rounded-xl hover:bg-blue-600 hover:text-white transition-all" title="Edit Listing">
-                                <Pencil size={20}/>
-                            </Link>
-
-                            {/* Delete Button */}
-                            <form action={async () => {
-                                'use server'
-                                await deleteListing(item.id)
-                            }}>
-                                <button className="p-3 bg-red-900/20 text-red-500 rounded-xl hover:bg-red-600 hover:text-white transition-all" title="Delete Listing">
-                                    <Trash2 size={20}/>
-                                </button>
-                            </form>
-                        </div>
-
-                    </div>
-                ))}
+                    ) : properties.map((item) => (
+                        <DashboardListingCard key={item.id} item={item} />
+                    ))}
+                </div>
             </div>
+
+            {/* 2. VEHICLES SECTION */}
+            <div>
+                <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-orange-900/30 text-orange-400 rounded-lg"><Car size={20}/></div>
+                    <h3 className="text-xl font-bold">Vehicle Listings <span className="text-sm text-gray-500 ml-2">({vehicles.length})</span></h3>
+                </div>
+
+                <div className="space-y-4">
+                    {vehicles.length === 0 ? (
+                        <div className="p-8 border border-white/5 bg-white/5 rounded-2xl text-center text-gray-500 text-sm">
+                            No vehicles listed yet.
+                        </div>
+                    ) : vehicles.map((item) => (
+                        <DashboardListingCard key={item.id} item={item} />
+                    ))}
+                </div>
+            </div>
+
         </div>
 
       </div>
     </div>
   );
+}
+
+// Sub-component for Cleaner Code
+function DashboardListingCard({ item }: { item: any }) {
+    return (
+        <div className="bg-neutral-900 border border-white/5 p-6 rounded-2xl flex flex-col gap-6 group hover:border-white/20 transition-all">
+            
+            {/* Top Row: Info */}
+            <div className="flex gap-4">
+                <div className="relative w-24 h-24 bg-neutral-800 rounded-xl overflow-hidden flex-shrink-0">
+                    <Image 
+                        src={item.images ? item.images.split(',')[0] : 'https://via.placeholder.com/150'} 
+                        alt="Thumb" 
+                        fill 
+                        className="object-cover"
+                    />
+                </div>
+                <div className="flex-grow min-w-0">
+                    <h4 className="font-bold text-lg line-clamp-1 text-white">{item.title}</h4>
+                    <p className="text-blue-400 font-bold text-sm mb-2">RM {item.price.toLocaleString()}</p>
+                    <div className="flex items-center gap-4 text-xs text-gray-500">
+                        <span className="flex items-center gap-1"><MapPin size={12}/> {item.location}</span>
+                        <span>Listed {new Date(item.createdAt).toLocaleDateString()}</span>
+                    </div>
+                </div>
+                
+                {/* Actions Dropdown / Buttons */}
+                <div className="flex flex-col gap-2">
+                    <Link href={`/edit/${item.id}`} className="p-2 bg-white/5 text-gray-400 rounded-lg hover:bg-white/10 hover:text-white transition-all text-center" title="Edit">
+                        <Pencil size={16}/>
+                    </Link>
+                    <form action={async () => {
+                        'use server'
+                        await deleteListing(item.id)
+                    }}>
+                        <button className="p-2 bg-red-900/10 text-red-500 rounded-lg hover:bg-red-900/30 transition-all w-full flex justify-center" title="Delete">
+                            <Trash2 size={16}/>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            {/* Bottom Row: Analytics Bar */}
+            <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                
+                {/* Stats */}
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2 text-sm text-gray-400" title="Total Page Views">
+                        <Eye size={16}/> <span className="font-bold text-white">{item.views}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-400" title="WhatsApp Clicks">
+                        <MessageCircle size={16}/> <span className="font-bold text-white">{item.whatsappClicks}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-400" title="Call Button Clicks">
+                        <Phone size={16}/> <span className="font-bold text-white">{item.callClicks}</span>
+                    </div>
+                </div>
+
+                {/* AI Coach Button */}
+                <AICoachModal listingId={item.id} />
+
+            </div>
+
+        </div>
+    );
 }

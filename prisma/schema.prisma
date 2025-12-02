@@ -11,24 +11,24 @@ datasource db {
 
 // 2. USER
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
-  name        String?
-  role        String   @default("USER") // "USER" or "ADMIN"
-  credits     Int      @default(0)
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  role         String   @default("USER") // "USER" or "ADMIN"
+  credits      Int      @default(0)
   
-  // --- NEW PROFILE FIELDS ---
-  phoneNumber String?  // Essential for WhatsApp
-  bio         String?  // Short description
-  website     String?  // Personal agent site
-  profileImage String?  // Custom Photo URL
+  // --- PROFILE FIELDS ---
+  phoneNumber  String?
+  bio          String?
+  website      String?
+  profileImage String?
   
-  createdAt   DateTime @default(now())
-  listings    Listing[]
-  favorites   Favorite[]
+  createdAt    DateTime @default(now())
+  listings     Listing[]
+  favorites    Favorite[]
 }
 
-// 3. FAVORITE (RESTORED)
+// 3. FAVORITE
 model Favorite {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
@@ -63,8 +63,15 @@ model Listing {
   // Status
   condition   String?
   verified    Boolean  @default(false)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
 
-  // Property
+  // --- ANALYTICS ---
+  views           Int      @default(0)
+  whatsappClicks  Int      @default(0)
+  callClicks      Int      @default(0)
+  
+  // Property Specifics
   bedrooms    Int?
   bathrooms   Int?
   sqft        Int?
@@ -74,7 +81,7 @@ model Listing {
   listingCategory String?
   facilities      String?
 
-  // Vehicle
+  // Vehicle Specifics
   brand       String?
   model       String?
   year        Int?
@@ -90,12 +97,19 @@ model Listing {
   engineCC    Int?
   peakPower   Int?
   peakTorque  Int?
-  // Removed L/W/H as requested
-
-  published   Boolean  @default(false)
-  createdAt   DateTime @default(now())
 
   userId      String
   user        User     @relation(fields: [userId], references: [id])
-  favorites   Favorite[] // <--- RESTORED
+  favorites   Favorite[]
+}
+
+// 5. NEWS ARTICLE
+model NewsArticle {
+  id          String   @id @default(uuid())
+  title       String
+  summary     String
+  content     String   // Full article (HTML or Markdown)
+  category    String   // "Property" or "Vehicle"
+  imageUrl    String
+  createdAt   DateTime @default(now())
 }
