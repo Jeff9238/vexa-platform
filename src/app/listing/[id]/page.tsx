@@ -3,13 +3,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { MapPin, Share2, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import ImageGallery from "@/components/ImageGallery"; 
 import LocationMap from "@/components/LocationMap";
 import FavoriteButton from "@/components/FavoriteButton"; 
 import LoanCalculator from "@/components/LoanCalculator"; 
-import BackButton from "@/components/BackButton"; 
 import { getFavoriteStatus } from "@/app/actions"; 
+import SearchInput from "@/components/SearchInput"; 
+import { Suspense } from "react"; 
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
@@ -22,9 +23,8 @@ export default async function ListingPage({
     searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
   const { id } = await params;
-  const sp = await searchParams; // Get Search Parameters (Filters)
+  const sp = await searchParams;
   
-  // 1. Fetch listing AND the user (agent) details
   const listing = await prisma.listing.findUnique({ 
       where: { id }, 
       include: { user: true } 
@@ -32,16 +32,10 @@ export default async function ListingPage({
 
   if (!listing) notFound();
 
-  // --- NAVIGATION LOGIC (NEXT/PREV) ---
-  // Reconstruct the search filter to find neighbors
+  // --- NAVIGATION LOGIC ---
   const typeFilter = typeof sp.type === 'string' ? sp.type : listing.type;
-  
-  const whereClause: any = {
-    published: true,
-    type: typeFilter,
-  };
+  const whereClause: any = { published: true, type: typeFilter };
 
-  // Apply filters if they exist in URL (Consistency with Search Page)
   if (sp.listingCategory) whereClause.listingCategory = sp.listingCategory;
   if (sp.bodyType) whereClause.bodyType = sp.bodyType;
   if (sp.state) whereClause.state = { equals: sp.state, mode: 'insensitive' };
@@ -52,44 +46,30 @@ export default async function ListingPage({
         { tags: { contains: sp.q as string, mode: 'insensitive' } },
     ];
   }
-  const minPrice = sp.minPrice ? parseFloat(sp.minPrice as string) : undefined;
-  const maxPrice = sp.maxPrice ? parseFloat(sp.maxPrice as string) : undefined;
-  if (minPrice || maxPrice) {
-    whereClause.price = {};
-    if (minPrice) whereClause.price.gte = minPrice;
-    if (maxPrice) whereClause.price.lte = maxPrice;
-  }
-  if (sp.brand) whereClause.brand = { contains: sp.brand as string, mode: 'insensitive' };
-
-  // Fetch only IDs for navigation context
+  
   const contextListings = await prisma.listing.findMany({
     where: whereClause,
     select: { id: true },
     orderBy: { createdAt: 'desc' },
-    take: 100 // Limit for performance, assuming users won't scroll 100+ deep
+    take: 100
   });
 
   const currentIndex = contextListings.findIndex(x => x.id === listing.id);
   const prevId = currentIndex > 0 ? contextListings[currentIndex - 1].id : null;
   const nextId = currentIndex !== -1 && currentIndex < contextListings.length - 1 ? contextListings[currentIndex + 1].id : null;
 
-  // Build query string to preserve filters on navigation
   const queryString = new URLSearchParams();
   Object.entries(sp).forEach(([k, v]) => {
       if (typeof v === 'string') queryString.set(k, v);
   });
   const queryStr = queryString.toString() ? `?${queryString.toString()}` : '';
-
-  // ------------------------------------
+  // ------------------------
 
   const images = listing.images ? listing.images.split(',') : [];
   const heroImage = images[0] || 'https://via.placeholder.com/800';
   const facilities = listing.facilities ? listing.facilities.split(',') : [];
-
-  // Check if current user liked this
   const isLiked = await getFavoriteStatus(id);
 
-  // --- CONTACT LOGIC ---
   const phone = listing.user.phoneNumber ? listing.user.phoneNumber.replace(/[^0-9]/g, '') : '';
   const whatsappUrl = phone 
     ? `https://wa.me/${phone}?text=Hi ${listing.user.name}, I am interested in your listing on VEXA: ${listing.title}`
@@ -98,49 +78,57 @@ export default async function ListingPage({
   return (
     <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
-      {/* NAV */}
-      <nav className="fixed top-0 w-full z-50 bg-gradient-to-b from-black/80 to-transparent px-6 py-4 flex justify-between items-center pointer-events-none">
+      {/* CUSTOM LISTING HEADER (Restored) */}
+      <nav className="fixed top-0 w-full z-[100] px-4 md:px-6 py-4 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/10">
         
-        <div className="flex items-center gap-4 pointer-events-auto">
-            {/* REPLACED LINK WITH BACK BUTTON COMPONENT */}
-            <BackButton />
+        {/* LEFT: VEXA LOGO (Back to Home) */}
+        <Link href="/" className="pointer-events-auto group flex-shrink-0">
+            <div className="relative w-10 h-10 md:w-12 md:h-12 overflow-hidden rounded-2xl shadow-xl shadow-black/50 border border-white/10 bg-white hover:scale-105 transition-transform flex items-center justify-center"> 
+                <Image 
+                    src="/vexa.jpg" 
+                    alt="VEXA" 
+                    fill 
+                    className="object-cover p-0.5" 
+                />
+            </div>
+        </Link>
 
-            {/* PREV / NEXT BUTTONS */}
-            {(prevId || nextId) && (
-                <div className="flex bg-black/40 backdrop-blur-md border border-white/10 rounded-full overflow-hidden">
-                    {prevId ? (
-                        <Link href={`/listing/${prevId}${queryStr}`} className="px-3 py-2 hover:bg-white/10 border-r border-white/10 text-white transition-colors" title="Previous Listing">
-                            <ChevronLeft size={18}/>
-                        </Link>
-                    ) : (
-                        <div className="px-3 py-2 text-gray-600 border-r border-white/10 cursor-not-allowed"><ChevronLeft size={18}/></div>
-                    )}
-                    
-                    {nextId ? (
-                        <Link href={`/listing/${nextId}${queryStr}`} className="px-3 py-2 hover:bg-white/10 text-white transition-colors" title="Next Listing">
-                            <ChevronRight size={18}/>
-                        </Link>
-                    ) : (
-                        <div className="px-3 py-2 text-gray-600 cursor-not-allowed"><ChevronRight size={18}/></div>
-                    )}
-                </div>
-            )}
+        {/* MIDDLE: SEARCH BAR */}
+        <div className="flex-1 max-w-xl mx-2 md:mx-4 pointer-events-auto">
+             <Suspense fallback={<div className="h-12 w-full bg-white/5 rounded-2xl animate-pulse"></div>}>
+                <SearchInput />
+             </Suspense>
         </div>
         
-        <div className="flex gap-3 pointer-events-auto">
-            <div className="bg-black/40 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center w-10 h-10">
+        {/* RIGHT: ACTIONS (Heart & Share) */}
+        <div className="flex items-center gap-2 pointer-events-auto bg-black/60 backdrop-blur-xl border border-white/10 rounded-full p-1.5 shadow-2xl flex-shrink-0">
+            <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition-colors">
                 <FavoriteButton listingId={listing.id} initialLiked={isLiked} />
             </div>
-            <button className="w-10 h-10 bg-black/40 text-white rounded-full backdrop-blur-md hover:bg-white hover:text-black transition-all border border-white/10 flex items-center justify-center">
-                <Share2 size={18}/>
+            <div className="w-[1px] h-6 bg-white/20"></div>
+            <button className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:text-blue-400 hover:bg-white/10 transition-colors">
+                <Share2 size={20}/>
             </button>
         </div>
       </nav>
 
       {/* 1. HERO IMAGE */}
-      <div className="relative w-full h-[65vh]">
+      <div className="relative w-full h-[65vh] group">
          <Image src={heroImage} alt={listing.title} fill className="object-cover" priority />
          <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"/>
+         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent opacity-60"/>
+
+         {/* NEXT / PREV BUTTONS */}
+         {prevId && (
+             <Link href={`/listing/${prevId}${queryStr}`} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full border border-white/10 transition-all hover:scale-110 opacity-0 group-hover:opacity-100" title="Previous Listing">
+                 <ChevronLeft size={24}/>
+             </Link>
+         )}
+         {nextId && (
+             <Link href={`/listing/${nextId}${queryStr}`} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full border border-white/10 transition-all hover:scale-110 opacity-0 group-hover:opacity-100" title="Next Listing">
+                 <ChevronRight size={24}/>
+             </Link>
+         )}
          
          <div className="absolute bottom-0 left-0 w-full px-6 md:px-12 pb-12 max-w-7xl mx-auto">
             <div className="flex gap-2 mb-4">
@@ -170,7 +158,6 @@ export default async function ListingPage({
                   
                   <div className="hidden md:block w-[1px] h-10 bg-white/10"></div>
                   
-                  {/* AGENT PROFILE LINK */}
                   <div className="hidden md:flex items-center gap-3">
                       <Link href={`/agent/${listing.user.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity group">
                           <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-sm border border-white/20 overflow-hidden relative">
@@ -201,8 +188,6 @@ export default async function ListingPage({
 
       {/* 3. MAIN CONTENT */}
       <div className="max-w-5xl mx-auto px-6 py-12 space-y-16">
-        
-            {/* HIGHLIGHTS */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {listing.type === 'PROPERTY' ? (
                     <>
@@ -221,10 +206,8 @@ export default async function ListingPage({
                 )}
             </div>
 
-            {/* GALLERY */}
             <ImageGallery images={images} title={listing.title} />
 
-            {/* DESCRIPTION */}
             <div>
                 <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">Description</h3>
                 <div className="text-gray-300 whitespace-pre-line leading-relaxed text-lg">
@@ -232,7 +215,6 @@ export default async function ListingPage({
                 </div>
             </div>
 
-            {/* SPECS TABLE */}
             <div>
                 <h3 className="text-lg font-bold mb-6 border-l-4 border-blue-500 pl-3">Full Specifications</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-4 text-sm bg-neutral-900/50 p-8 rounded-3xl border border-white/5">
@@ -264,7 +246,6 @@ export default async function ListingPage({
                 </div>
             </div>
 
-            {/* FACILITIES */}
             {listing.type === 'PROPERTY' && facilities.length > 0 && (
                 <div>
                     <h3 className="text-lg font-bold mb-6 border-l-4 border-purple-500 pl-3">Facilities</h3>
@@ -278,7 +259,6 @@ export default async function ListingPage({
                 </div>
             )}
 
-            {/* MAP */}
             {listing.lat && listing.lng && (
                 <div>
                     <h3 className="text-lg font-bold mb-6 flex items-center gap-2">Location & Amenities</h3>
@@ -288,7 +268,6 @@ export default async function ListingPage({
                 </div>
             )}
 
-            {/* LOAN CALCULATOR */}
             <div>
                 <LoanCalculator price={listing.price} type={listing.type as 'PROPERTY' | 'VEHICLE'} />
             </div>
