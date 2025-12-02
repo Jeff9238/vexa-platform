@@ -1,7 +1,7 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect } from 'react';
 import { Search, Filter, MapPin, Car, Check } from 'lucide-react';
 
 const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
@@ -25,7 +25,9 @@ export default function FilterSidebar() {
   
   // Load initial state from URL
   const [filters, setFilters] = useState({
-    type: searchParams.get('type') || 'VEHICLE',
+    // FIX: Only default to 'VEHICLE' if there is NO search query. 
+    // If searching (q exists), allow type to be empty (All Categories).
+    type: searchParams.get('type') || (searchParams.get('q') ? '' : 'VEHICLE'),
     q: searchParams.get('q') || '',
     minPrice: searchParams.get('minPrice') || '',
     maxPrice: searchParams.get('maxPrice') || '',
@@ -40,19 +42,35 @@ export default function FilterSidebar() {
     listingCategory: searchParams.get('listingCategory') || '',
   });
 
-  // --- NEW: AUTO-UPDATE LOGIC ---
-  // This effect runs whenever 'filters' changes, updating the URL automatically.
+  // Sync state if URL changes externally (e.g. from Navbar Search)
+  useEffect(() => {
+      setFilters(prev => ({
+          ...prev,
+          q: searchParams.get('q') || '',
+          // If URL type is cleared (by navbar), update local state to match
+          type: searchParams.get('type') || (searchParams.get('q') ? '' : 'VEHICLE')
+      }));
+  }, [searchParams]);
+
+  // Auto-Update URL
   useEffect(() => {
     const timeoutId = setTimeout(() => {
         const params = new URLSearchParams();
         Object.entries(filters).forEach(([key, value]) => {
           if (value) params.set(key, value);
         });
-        router.push(`/search?${params.toString()}`);
-    }, 500); // 0.5s delay to prevent stuttering while typing
+        
+        // Only push if params actually changed to prevent infinite loops/reloads
+        const currentString = searchParams.toString();
+        const newString = params.toString();
+        
+        if (currentString !== newString) {
+            router.push(`/search?${newString}`);
+        }
+    }, 500); // 0.5s delay
 
     return () => clearTimeout(timeoutId);
-  }, [filters, router]);
+  }, [filters, router, searchParams]);
 
   const handleChange = (e: any) => {
     setFilters({ ...filters, [e.target.name]: e.target.value });
@@ -73,10 +91,20 @@ export default function FilterSidebar() {
 
       <div className="space-y-6">
         
-        {/* CATEGORY */}
+        {/* CATEGORY SELECTOR */}
         <div className="flex bg-black p-1 rounded-lg border border-white/10">
-            <button onClick={() => setFilters({...filters, type: 'PROPERTY', brand: ''})} className={`flex-1 py-2 text-xs font-bold rounded transition-all ${filters.type === 'PROPERTY' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}>Property</button>
-            <button onClick={() => setFilters({...filters, type: 'VEHICLE'})} className={`flex-1 py-2 text-xs font-bold rounded transition-all ${filters.type === 'VEHICLE' ? 'bg-orange-600 text-white' : 'text-gray-500 hover:text-white'}`}>Vehicle</button>
+            <button 
+                onClick={() => setFilters({...filters, type: 'PROPERTY', brand: ''})} 
+                className={`flex-1 py-2 text-xs font-bold rounded transition-all ${filters.type === 'PROPERTY' ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-white'}`}
+            >
+                Property
+            </button>
+            <button 
+                onClick={() => setFilters({...filters, type: 'VEHICLE'})} 
+                className={`flex-1 py-2 text-xs font-bold rounded transition-all ${filters.type === 'VEHICLE' ? 'bg-orange-600 text-white' : 'text-gray-500 hover:text-white'}`}
+            >
+                Vehicle
+            </button>
         </div>
 
         {/* KEYWORD */}
@@ -100,7 +128,7 @@ export default function FilterSidebar() {
             </div>
         </div>
 
-        {/* BRAND GRID */}
+        {/* BRAND GRID (Only show if Vehicle is strictly selected) */}
         {filters.type === 'VEHICLE' && (
             <div>
                 <label className="text-xs text-gray-500 font-bold uppercase mb-2 block">Popular Brands</label>
@@ -127,9 +155,6 @@ export default function FilterSidebar() {
                 </select>
             </div>
         )}
-
-        {/* REST OF FILTERS */}
-        {/* We removed the 'Apply' button because it's automatic now! */}
       </div>
     </div>
   );

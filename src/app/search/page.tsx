@@ -2,9 +2,10 @@ import { prisma } from "@/lib/prisma";
 import Image from "next/image";
 import Link from "next/link";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { BedDouble, Car, ArrowLeft, Filter, MapPin } from "lucide-react";
+import { BedDouble, Car, ArrowLeft, MapPin } from "lucide-react";
 import FilterSidebar from "@/components/FilterSidebar";
-import { Suspense } from "react"; // <--- NEW IMPORT
+import { Suspense } from "react";
+import SearchInput from "@/components/SearchInput"; 
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
@@ -16,9 +17,18 @@ export default async function SearchPage({
 }) {
   
   const params = await searchParams;
-  const typeFilter = typeof params.type === 'string' ? params.type : 'VEHICLE';
   const query = typeof params.q === 'string' ? params.q : undefined;
   
+  // --- FIX: SMART TYPE FILTERING ---
+  // 1. If 'type' is explicitly in URL, use it.
+  // 2. If 'type' is missing BUT we have a search 'query', search ALL types (undefined).
+  // 3. If neither, default to 'VEHICLE' (initial page load).
+  let typeFilter = typeof params.type === 'string' ? params.type : undefined;
+  
+  if (!typeFilter && !query) {
+      typeFilter = 'VEHICLE';
+  }
+
   // Filters
   const listingCategory = typeof params.listingCategory === 'string' ? params.listingCategory : undefined;
   const bodyType = typeof params.bodyType === 'string' ? params.bodyType : undefined;
@@ -33,8 +43,12 @@ export default async function SearchPage({
 
   const whereClause: any = {
     published: true,
-    type: typeFilter,
   };
+
+  // Only apply type filter if we determined one is needed
+  if (typeFilter) {
+      whereClause.type = typeFilter;
+  }
 
   if (listingCategory) whereClause.listingCategory = listingCategory;
   if (bodyType) whereClause.bodyType = bodyType;
@@ -70,22 +84,33 @@ export default async function SearchPage({
   return (
     <div className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
-      <nav className="sticky top-0 z-50 bg-[#0a0a0a]/80 backdrop-blur-md border-b border-white/10 px-6 py-4 flex items-center gap-4">
-        <Link href="/" className="p-2 hover:bg-white/10 rounded-full transition-colors"><ArrowLeft size={20}/></Link>
-        <div className="flex flex-col">
+      {/* HEADER BAR (FIXED) */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-xl border-b border-white/10 px-6 h-20 flex items-center gap-4 shadow-2xl">
+        <Link href="/" className="p-2 hover:bg-white/10 rounded-full transition-colors flex-shrink-0"><ArrowLeft size={20}/></Link>
+        
+        <div className="flex flex-col flex-shrink-0 min-w-[100px]">
             <span className={`text-xl font-bold ${serifFont.className}`}>
-                {typeFilter === 'PROPERTY' ? 'Properties' : 'Vehicles'}
+                {/* Dynamic Title based on what we are showing */}
+                {typeFilter === 'PROPERTY' ? 'Properties' : typeFilter === 'VEHICLE' ? 'Vehicles' : 'All Results'}
             </span>
             <div className="flex gap-2 text-xs">
                 {listingCategory && <span className="text-blue-400 font-bold uppercase">For {listingCategory}</span>}
                 {stateFilter && <span className="text-gray-400 font-bold uppercase">• {stateFilter}</span>}
+                {!typeFilter && query && <span className="text-gray-400 font-bold uppercase">• "{query}"</span>}
             </div>
         </div>
+
+        {/* SEARCH BAR COMPONENT */}
+        <Suspense fallback={<div className="h-12 w-full max-w-xl bg-white/5 rounded-2xl animate-pulse mx-4"></div>}>
+            <SearchInput />
+        </Suspense>
+
       </nav>
 
-      <div className="max-w-[1600px] mx-auto px-6 py-8 flex flex-col lg:flex-row gap-8">
+      {/* MAIN CONTENT */}
+      <div className="max-w-[1600px] mx-auto px-6 py-8 pt-28 flex flex-col lg:flex-row gap-8">
         
-        {/* FIX: WRAP CLIENT COMPONENT IN SUSPENSE */}
+        {/* Sidebar Filter */}
         <Suspense fallback={<div className="w-full lg:w-80 h-96 bg-neutral-900 rounded-2xl animate-pulse"></div>}>
              <FilterSidebar />
         </Suspense>
