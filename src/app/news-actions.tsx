@@ -3,80 +3,155 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { createClient } from '@supabase/supabase-js';
+
+// 1. Initialize Supabase (for storing generated images)
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// --- 1. GENERATE DAILY NEWS ---
-export async function checkAndGenerateNews() {
+// Reliable Static Images (Use these if AI fails)
+const FALLBACK_PROPERTY = "https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=800";
+const FALLBACK_VEHICLE = "https://images.unsplash.com/photo-1503376763036-066120622c74?q=80&w=800";
+
+// --- HELPER: Generate Image using Imagen 4.0 ---
+async function generateAIImage(prompt: string): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:predict?key=${apiKey}`;
+
+  const payload = {
+    instances: [{ prompt: `Photorealistic, high quality, 4k, cinematic lighting: ${prompt}` }],
+    parameters: { sampleCount: 1 }
+  };
+
   try {
-    // A. Check if we have ANY news (First run check)
-    const count = await prisma.newsArticle.count();
-    
-    // --- FALLBACK: If DB is empty, create a Sample Article immediately ---
-    if (count === 0) {
-        console.log("Database empty. Creating sample news...");
-        await prisma.newsArticle.create({
-            data: {
-                title: "Welcome to VEXA: The Future of Asset Trading",
-                summary: "Discover how VEXA is revolutionizing the way Malaysia buys and sells premium property and high-performance vehicles.",
-                content: "<p>Welcome to the launch of VEXA. We are proud to introduce a unified marketplace designed for the discerning buyer.</p><p>Whether you are looking for a luxury condo in Mont Kiara or a BMW M4 for your weekend drives, VEXA brings it all together in one seamless experience.</p><p>Stay tuned to this section for daily AI-curated market insights, automotive trends, and investment tips.</p>",
-                category: "Platform Update",
-                // Using a reliable static Unsplash image ID
-                imageUrl: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800&auto=format&fit=crop"
-            }
-        });
-        revalidatePath('/'); // Refresh homepage
-        return; 
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+        // Log error but don't crash; return null to trigger fallback
+        console.warn("Imagen API unavailable (Billing/Quota): Using fallback image.");
+        return null; 
     }
 
-    // B. Normal Logic: Check if news exists for TODAY
+    const data = await response.json();
+    const base64Image = data.predictions?.[0]?.bytesBase64Encoded;
+
+    if (base64Image) {
+        const buffer = Buffer.from(base64Image, 'base64');
+        const fileName = `news/ai-gen-${Date.now()}.png`;
+
+        const { error } = await supabase.storage
+            .from('vexa-images')
+            .upload(fileName, buffer, { contentType: 'image/png' });
+
+        if (error) {
+            console.error("Supabase Upload Error:", error);
+            return null;
+        }
+
+        const { data: urlData } = supabase.storage
+            .from('vexa-images')
+            .getPublicUrl(fileName);
+            
+        return urlData.publicUrl;
+    }
+    return null;
+  } catch (e) {
+    console.error("Image Gen Exception:", e);
+    return null;
+  }
+}
+
+// --- MAIN: GENERATE DAILY NEWS ---
+export async function checkAndGenerateNews() {
+  try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    // 1. AUTO-FIX: Check if the latest article has a broken link OR is using a Fallback
+    const latest = await prisma.newsArticle.findFirst({ orderBy: { createdAt: 'desc' } });
+    
+    if (latest && (
+        latest.imageUrl.includes("source.unsplash.com") || 
+        latest.imageUrl.includes("via.placeholder.com") ||
+        latest.imageUrl.includes("image_unavailable") ||
+        latest.imageUrl === FALLBACK_PROPERTY || // <--- FIX: Retry if using Property Fallback
+        latest.imageUrl === FALLBACK_VEHICLE     // <--- FIX: Retry if using Vehicle Fallback
+    )) {
+        console.log("Attempting to upgrade image to AI for:", latest.title);
+        
+        // Try AI Generation
+        const newImage = await generateAIImage(`${latest.category} - ${latest.title}`);
+        
+        // Only update if AI actually succeeded
+        if (newImage) {
+            await prisma.newsArticle.update({
+                where: { id: latest.id },
+                data: { imageUrl: newImage }
+            });
+            revalidatePath('/');
+            return;
+        } else {
+             console.log("AI still unavailable. Keeping fallback.");
+        }
+    }
+
+    // 2. Check if news exists for TODAY
     const existingToday = await prisma.newsArticle.findFirst({
       where: { createdAt: { gte: today } },
     });
 
     if (existingToday) return; 
 
-    // C. AI Generation Logic
+    // 3. Generate Content Logic
     const isPropertyDay = today.getDate() % 2 === 0;
     const topic = isPropertyDay ? "Real Estate Market in Malaysia" : "Automotive Trends in Malaysia";
     const category = isPropertyDay ? "Property" : "Vehicle";
 
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     
-    const prompt = `
+    const textPrompt = `
       You are a senior editor for 'VEXA', a premium marketplace.
       Write a daily news article about: ${topic}.
       Focus on current trends for ${today.getFullYear()}.
       
-      Return ONLY a JSON object with this structure:
+      Return ONLY a JSON object:
       {
-        "title": "A catchy, professional headline",
-        "summary": "A 2-sentence summary for the card preview",
-        "content": "A 4-paragraph article formatted with <p> tags. Informative and engaging.",
-        "imageKeyword": "One word to search for an image (e.g. Condo, BMW, House)"
+        "title": "Headline",
+        "summary": "2 sentences",
+        "content": "4 paragraphs with <p> tags",
+        "imagePrompt": "A detailed description of an image representing this news for an AI image generator"
       }
     `;
 
-    const result = await model.generateContent(prompt);
+    const result = await model.generateContent(textPrompt);
     const response = await result.response;
-    const text = response.text().replace(/```json|```/g, '').trim();
-    const data = JSON.parse(text);
+    const cleanText = response.text().replace(/```json|```/g, '').trim();
+    const data = JSON.parse(cleanText);
 
-    // Fallback image based on category if keyword fails
-    const defaultImage = category === 'Property' 
-        ? "https://images.unsplash.com/photo-1560518883-ce09059eeffa?q=80&w=800" 
-        : "https://images.unsplash.com/photo-1503376763036-066120622c74?q=80&w=800";
+    // 4. Generate AI Image (or Fallback)
+    console.log("Generating News Article:", data.title);
+    let finalImageUrl = await generateAIImage(data.imagePrompt);
 
+    if (!finalImageUrl) {
+        finalImageUrl = category === 'Property' ? FALLBACK_PROPERTY : FALLBACK_VEHICLE;
+    }
+
+    // 5. Save to DB
     await prisma.newsArticle.create({
       data: {
         title: data.title,
         summary: data.summary,
         content: data.content,
         category: category,
-        imageUrl: defaultImage, 
+        imageUrl: finalImageUrl, 
       }
     });
 
@@ -88,23 +163,20 @@ export async function checkAndGenerateNews() {
   }
 }
 
-// --- 2. GET LATEST NEWS (Home) ---
+// --- GETTERS ---
 export async function getLatestNews() {
-  // Add no-store to ensure we fetch fresh data if it was just created
   return await prisma.newsArticle.findMany({
     orderBy: { createdAt: 'desc' },
     take: 3
   });
 }
 
-// --- 3. GET ALL NEWS (Archive) ---
 export async function getAllNews() {
   return await prisma.newsArticle.findMany({
     orderBy: { createdAt: 'desc' }
   });
 }
 
-// --- 4. GET SINGLE ARTICLE ---
 export async function getArticle(id: string) {
   return await prisma.newsArticle.findUnique({ where: { id } });
 }
