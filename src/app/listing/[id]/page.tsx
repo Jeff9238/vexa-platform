@@ -1,346 +1,340 @@
-import { prisma } from "@/lib/prisma";
-import Image from "next/image";
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { Playfair_Display, Manrope } from 'next/font/google';
-import { MapPin, Share2, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
-import ImageGallery from "@/components/ImageGallery"; 
-import LocationMap from "@/components/LocationMap";
-import FavoriteButton from "@/components/FavoriteButton"; 
-import LoanCalculator from "@/components/LoanCalculator"; 
-import { getFavoriteStatus, incrementView } from "@/app/actions"; 
-import SearchInput from "@/components/SearchInput"; 
-import { Suspense } from "react"; 
+'use client'
 
-const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
-const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
+import { useEffect, useState, use } from 'react';
+import { useRouter } from 'next/navigation';
+import { getListing, updateListing } from '@/app/actions';
+import { ArrowLeft, Loader2, Save, Check, Upload, X, Star, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { createClient } from '@supabase/supabase-js';
+import Image from 'next/image';
+import MapPicker from '@/components/MapPicker';
 
-export default async function ListingPage({ 
-    params, 
-    searchParams 
-}: { 
-    params: Promise<{ id: string }>;
-    searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
-}) {
-  const { id } = await params;
-  const sp = await searchParams;
-  
-  // 1. Fetch listing AND the user (agent) details
-  const listing = await prisma.listing.findUnique({ 
-      where: { id }, 
-      include: { user: true } 
+// Initialize Supabase Client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
+const PROPERTY_TYPES = ["Terrace", "Condo", "Bungalow", "Semi-D", "Apartment", "Townhouse", "Shoplot", "Office", "Factory", "Warehouse", "Land", "Hotel"];
+const FACILITIES_LIST = ["Swimming Pool", "Gymnasium", "24H Security", "Parking", "Elevator", "Playground", "Balcony", "Aircon", "Wifi", "Kitchen Cabinet", "Near MRT/LRT", "Garden"];
+
+// Helper Type for Gallery
+type ImageItem = {
+    id: string;
+    url: string;
+    file?: File; // Only new images have this
+};
+
+export default function EditPage({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
+  const resolvedParams = use(params);
+  const id = resolvedParams.id;
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
+  const [gallery, setGallery] = useState<ImageItem[]>([]);
+
+  const [formData, setFormData] = useState({
+    title: '', description: '', price: '', 
+    area: '', state: '', locationName: '',
+    lat: null as number | null, lng: null as number | null, 
+    type: 'PROPERTY', tags: '', condition: '', listingCategory: '', status: 'ACTIVE',
+    
+    // Property
+    propertyType: '', bedrooms: '', bathrooms: '', carParks: '', sqft: '', furnishing: '',
+    
+    // Vehicle
+    brand: '', model: '', variant: '', series: '', year: '', mileage: '', 
+    color: '', origin: '', bodyType: '', transmission: '', fuelType: '', seats: '',
+    engineCC: '', peakPower: '', peakTorque: ''
   });
 
-  if (!listing) notFound();
+  // 1. Load Data on Mount
+  useEffect(() => {
+    getListing(id).then((data: any) => {
+      if (data) {
+        setFormData({
+          title: data.title || '',
+          description: data.description || '',
+          price: data.price?.toString() || '',
+          
+          // Location
+          area: data.area || '',
+          state: data.state || '',
+          locationName: data.locationName || '',
+          lat: data.lat || null,
+          lng: data.lng || null,
 
-  // 2. Track View (Analytics)
-  await incrementView(id);
+          type: data.type || 'PROPERTY',
+          tags: data.tags || '',
+          condition: data.condition || '',
+          listingCategory: data.listingCategory || '',
+          status: data.status || 'ACTIVE',
+          
+          // Property
+          propertyType: data.propertyType || '',
+          bedrooms: data.bedrooms?.toString() || '',
+          bathrooms: data.bathrooms?.toString() || '',
+          carParks: data.carParks?.toString() || '',
+          sqft: data.sqft?.toString() || '',
+          furnishing: data.furnishing || '',
 
-  // --- NAVIGATION LOGIC ---
-  const typeFilter = typeof sp.type === 'string' ? sp.type : listing.type;
-  
-  const whereClause: any = {
-    published: true,
-    type: typeFilter,
+          // Vehicle
+          brand: data.brand || '',
+          model: data.model || '',
+          variant: data.variant || '',
+          series: data.series || '',
+          year: data.year?.toString() || '',
+          mileage: data.mileage?.toString() || '',
+          color: data.color || '',
+          origin: data.origin || '',
+          bodyType: data.bodyType || '',
+          transmission: data.transmission || '',
+          fuelType: data.fuelType || '',
+          seats: data.seats?.toString() || '',
+          engineCC: data.engineCC?.toString() || '',
+          peakPower: data.peakPower?.toString() || '',
+          peakTorque: data.peakTorque?.toString() || ''
+        });
+
+        if (data.facilities) {
+            setSelectedFacilities(data.facilities.split(','));
+        }
+
+        if (data.images) {
+            const urls = data.images.split(',');
+            setGallery(urls.map((url: string) => ({
+                id: Math.random().toString(36),
+                url: url
+            })));
+        }
+      }
+      setLoading(false);
+    });
+  }, [id]);
+
+  // --- HANDLERS ---
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files) return;
+    const newFiles = Array.from(e.target.files);
+    
+    const newItems: ImageItem[] = newFiles.map(file => ({
+        id: Math.random().toString(36),
+        url: URL.createObjectURL(file),
+        file: file
+    }));
+
+    setGallery(prev => [...prev, ...newItems].slice(0, 8)); // Max 8
   };
 
-  if (sp.listingCategory) whereClause.listingCategory = sp.listingCategory;
-  if (sp.bodyType) whereClause.bodyType = sp.bodyType;
-  if (sp.state) whereClause.state = { equals: sp.state, mode: 'insensitive' };
-  if (sp.q) {
-    whereClause.OR = [
-        { title: { contains: sp.q as string, mode: 'insensitive' } },
-        { description: { contains: sp.q as string, mode: 'insensitive' } },
-        { tags: { contains: sp.q as string, mode: 'insensitive' } },
-    ];
-  }
-  const minPrice = sp.minPrice ? parseFloat(sp.minPrice as string) : undefined;
-  const maxPrice = sp.maxPrice ? parseFloat(sp.maxPrice as string) : undefined;
-  if (minPrice || maxPrice) {
-    whereClause.price = {};
-    if (minPrice) whereClause.price.gte = minPrice;
-    if (maxPrice) whereClause.price.lte = maxPrice;
-  }
-  if (sp.brand) whereClause.brand = { contains: sp.brand as string, mode: 'insensitive' };
+  const removeImage = (id: string) => {
+    setGallery(prev => prev.filter(item => item.id !== id));
+  };
 
-  const contextListings = await prisma.listing.findMany({
-    where: whereClause,
-    select: { id: true },
-    orderBy: { createdAt: 'desc' },
-    take: 100
-  });
+  const setAsCover = (index: number) => {
+    if (index === 0) return;
+    const newGallery = [...gallery];
+    const [selected] = newGallery.splice(index, 1);
+    newGallery.unshift(selected);
+    setGallery(newGallery);
+  };
 
-  const currentIndex = contextListings.findIndex(x => x.id === listing.id);
-  const prevId = currentIndex > 0 ? contextListings[currentIndex - 1].id : null;
-  const nextId = currentIndex !== -1 && currentIndex < contextListings.length - 1 ? contextListings[currentIndex + 1].id : null;
+  const handleChange = (e: any) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
-  const queryString = new URLSearchParams();
-  Object.entries(sp).forEach(([k, v]) => {
-      if (typeof v === 'string') queryString.set(k, v);
-  });
-  const queryStr = queryString.toString() ? `?${queryString.toString()}` : '';
-  // ------------------------------------
+  const toggleFacility = (facility: string) => {
+    if (selectedFacilities.includes(facility)) {
+      setSelectedFacilities(prev => prev.filter(f => f !== facility));
+    } else {
+      setSelectedFacilities(prev => [...prev, facility]);
+    }
+  };
 
-  const images = listing.images ? listing.images.split(',') : [];
-  const heroImage = images[0] || 'https://via.placeholder.com/800';
-  const facilities = listing.facilities ? listing.facilities.split(',') : [];
+  const handleUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (gallery.length === 0) return alert("Please keep at least one photo.");
+    setSaving(true);
 
-  const isLiked = await getFavoriteStatus(id);
+    try {
+        // 1. Upload New Images
+        const finalImageUrls: string[] = [];
 
-  const phone = listing.user.phoneNumber ? listing.user.phoneNumber.replace(/[^0-9]/g, '') : '';
-  const whatsappUrl = phone 
-    ? `https://wa.me/${phone}?text=Hi ${listing.user.name}, I am interested in your listing on VEXA: ${listing.title}`
-    : `https://wa.me/?text=Hi, I am interested in ${listing.title}`;
+        for (const item of gallery) {
+            if (item.file) {
+                const name = `${Date.now()}-${Math.random().toString(36).substring(7)}-${item.file.name}`;
+                const { error } = await supabase.storage.from('vexa-images').upload(name, item.file);
+                if (error) throw error;
+                const { data } = supabase.storage.from('vexa-images').getPublicUrl(name);
+                finalImageUrls.push(data.publicUrl);
+            } else {
+                finalImageUrls.push(item.url);
+            }
+        }
+
+        // 2. Submit Data
+        const submitData = new FormData();
+        submitData.append('id', id);
+        
+        // Append all standard fields
+        Object.entries(formData).forEach(([key, value]) => {
+             if (value !== null) submitData.append(key, value.toString());
+        });
+        
+        submitData.append('facilities', selectedFacilities.join(','));
+        submitData.append('imageUrl', finalImageUrls.join(','));
+
+        await updateListing(submitData);
+        alert("Listing Updated Successfully!");
+        router.push('/dashboard');
+        router.refresh();
+
+    } catch (err) {
+        console.error(err);
+        alert("Error saving changes.");
+    } finally {
+        setSaving(false);
+    }
+  };
+
+  if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
 
   return (
-    <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
-      
-      {/* CUSTOM LISTING HEADER */}
-      <nav className="fixed top-0 w-full z-[100] px-4 md:px-6 py-4 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/10">
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 flex justify-center items-center font-sans">
+      <div className="max-w-5xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
         
-        {/* LEFT: VEXA LOGO */}
-        <Link href="/" className="pointer-events-auto group flex-shrink-0 mr-2 md:mr-0">
-            <div className="relative w-10 h-10 md:w-12 md:h-12 overflow-hidden rounded-2xl shadow-xl shadow-black/50 border border-white/10 bg-white hover:scale-105 transition-transform flex items-center justify-center"> 
-                <Image 
-                    src="/vexa.jpg" 
-                    alt="VEXA" 
-                    fill 
-                    className="object-cover p-0.5" 
-                />
+        <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+               <Link href="/dashboard" className="p-2 bg-white/5 rounded-full hover:bg-white/10"><ArrowLeft size={20}/></Link>
+               <div>
+                   <h1 className="text-3xl font-bold">Edit Listing</h1>
+                   <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Update details & photos</p>
+               </div>
             </div>
-        </Link>
-
-        {/* MIDDLE: SEARCH BAR */}
-        <div className="flex-1 max-w-xl mx-2 md:mx-4 pointer-events-auto min-w-0">
-             <Suspense fallback={<div className="h-12 w-full bg-white/5 rounded-2xl animate-pulse"></div>}>
-                <SearchInput />
-             </Suspense>
-        </div>
-        
-        {/* RIGHT SECTION: ACTIONS */}
-        <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
             
-            {/* Desktop-Only Agent Info in Header (Hidden on Mobile) */}
-            <div className="hidden md:flex items-center gap-3">
-                <Link href={`/agent/${listing.user.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity group pointer-events-auto">
-                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-sm border border-white/20 overflow-hidden relative shadow-lg">
-                        {listing.user.profileImage ? (
-                            <Image src={listing.user.profileImage} alt="Agent" fill className="object-cover"/>
-                        ) : (
-                            listing.user.name?.substring(0,2).toUpperCase()
-                        )}
-                    </div>
-                    <div>
-                        <p className="text-sm font-bold text-white leading-none mb-1 group-hover:text-blue-400 transition-colors">{listing.user.name}</p>
-                        <p className="text-[10px] text-blue-400 font-bold flex items-center gap-1"><CheckCircle size={10}/> Verified Agent</p>
-                    </div>
-                </Link>
-                <div className="w-[1px] h-10 bg-white/10"></div>
+            {/* Status Badge */}
+            <div className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest ${formData.status === 'SOLD' ? 'bg-red-900/30 text-red-400 border border-red-900/50' : 'bg-green-900/30 text-green-400 border border-green-900/50'}`}>
+                {formData.status}
             </div>
-
-            {/* ACTION BUTTONS (Heart & Share) */}
-            <div className="flex items-center gap-2 pointer-events-auto bg-black/60 backdrop-blur-xl border border-white/10 rounded-full p-1.5 shadow-2xl">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition-colors">
-                    <FavoriteButton listingId={listing.id} initialLiked={isLiked} />
-                </div>
-                <div className="w-[1px] h-6 bg-white/20 hidden md:block"></div>
-                <button className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:text-blue-400 hover:bg-white/10 transition-colors hidden md:flex">
-                    <Share2 size={20}/>
-                </button>
-            </div>
-
         </div>
-      </nav>
 
-      {/* 1. HERO IMAGE & NAVIGATION */}
-      <div className="relative w-full h-[65vh] group">
-         <Image src={heroImage} alt={listing.title} fill className="object-cover" priority />
-         <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-transparent"/>
-         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-transparent opacity-60"/>
+        <form onSubmit={handleUpdate} className="space-y-8">
 
-         {/* --- PREVIOUS / NEXT FLOATING BUTTONS --- */}
-         {prevId && (
-             <Link href={`/listing/${prevId}${queryStr}`} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full border border-white/10 transition-all hover:scale-110 opacity-0 group-hover:opacity-100" title="Previous Listing">
-                 <ChevronLeft size={24}/>
-             </Link>
-         )}
-         {nextId && (
-             <Link href={`/listing/${nextId}${queryStr}`} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 bg-black/40 hover:bg-black/80 backdrop-blur-md text-white p-3 rounded-full border border-white/10 transition-all hover:scale-110 opacity-0 group-hover:opacity-100" title="Next Listing">
-                 <ChevronRight size={24}/>
-             </Link>
-         )}
-         {/* ---------------------------------------- */}
-         
-         <div className="absolute bottom-0 left-0 w-full px-6 md:px-12 pb-12 max-w-7xl mx-auto">
-            
-            <div className="flex gap-2 mb-4">
-                <span className="bg-orange-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">{listing.condition || 'USED'}</span>
-                {listing.listingCategory && (
-                    <span className={`text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg ${listing.listingCategory === 'RENT' ? 'bg-purple-600' : 'bg-green-600'}`}>FOR {listing.listingCategory}</span>
+          {/* --- PHOTOS --- */}
+          <div className="space-y-2">
+              <label className="label">Manage Photos (Max 8)</label>
+              <div className="grid grid-cols-4 gap-4">
+                {gallery.length < 8 && (
+                    <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer bg-white/5 hover:bg-white/10 transition-colors">
+                        <input type="file" multiple onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
+                        <Upload className="text-gray-500" />
+                    </div>
                 )}
-            </div>
-            <h1 className={`text-4xl md:text-6xl text-white ${serifFont.className} mb-2 drop-shadow-md`}>{listing.title}</h1>
-            
-            <p className="text-xl text-gray-200 flex items-center gap-2 mt-2 drop-shadow-md">
-                <MapPin size={20} className="text-blue-400"/> 
-                {listing.locationName && <span className="font-bold text-white">{listing.locationName},</span>}
-                {listing.area}, {listing.state}
-            </p>
-         </div>
-      </div>
+                
+                {gallery.map((item, idx) => (
+                    <div key={item.id} className={`relative aspect-square bg-neutral-800 rounded-xl overflow-hidden border group transition-all ${idx === 0 ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/10'}`}>
+                        <Image src={item.url} alt="Preview" fill className="object-cover" />
+                        
+                        <button type="button" onClick={() => removeImage(item.id)} className="absolute top-1 right-1 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:scale-110">
+                            <X size={12} />
+                        </button>
 
-      {/* 2. SLIM ACTION BAR (Below Hero) */}
-      <div className="sticky top-0 z-40 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/10 shadow-2xl">
-          <div className="max-w-7xl mx-auto px-6 md:px-12 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-4 md:gap-6">
-                  <div>
-                      <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-0.5">Price</p>
-                      <div className="text-3xl md:text-4xl font-bold text-white font-serif">RM {listing.price.toLocaleString()}</div>
-                  </div>
-
-                  {/* --- AGENT CHIP (VISIBLE ON ALL SCREENS) --- */}
-                  <div>
-                    <Link href={`/agent/${listing.user.id}`} className="inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-white/10 transition-all group pointer-events-auto">
-                        <div className="relative w-6 h-6 md:w-8 md:h-8 rounded-full overflow-hidden border border-white/20">
-                            {listing.user.profileImage ? (
-                                <Image src={listing.user.profileImage} alt="Agent" fill className="object-cover"/>
-                            ) : (
-                                <div className="w-full h-full bg-blue-600 flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white">
-                                    {listing.user.name?.substring(0,2).toUpperCase()}
-                                </div>
-                            )}
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-[8px] md:text-[10px] text-gray-400 uppercase tracking-widest font-bold leading-none mb-0.5 md:mb-1">Listed By</span>
-                            <span className="text-xs font-bold text-white leading-none group-hover:text-blue-400 transition-colors flex items-center gap-1">
-                                {listing.user.name} <CheckCircle size={10} className="text-blue-500"/>
-                            </span>
-                        </div>
-                    </Link>
-                  </div>
-                  {/* ------------------------------------------- */}
-              </div>
-
-              <div className="flex items-center gap-3 w-full md:w-auto">
-                  <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebc50] text-white px-8 py-3 rounded-xl font-bold transition-all shadow-lg shadow-green-900/20">
-                      <MessageCircle size={20}/> <span className="whitespace-nowrap">WhatsApp</span>
-                  </a>
-                  <a href={phone ? `tel:${phone}` : '#'} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-3 rounded-xl font-bold transition-all ${phone ? 'bg-white hover:bg-gray-200 text-black' : 'bg-neutral-800 text-neutral-500 cursor-not-allowed'}`} title={phone ? "Call Now" : "Phone number not provided"}>
-                      <Phone size={20}/> <span className="whitespace-nowrap">{phone ? "Call" : "No Phone"}</span>
-                  </a>
+                        {idx !== 0 && (
+                            <button type="button" onClick={() => setAsCover(idx)} className="absolute top-1 left-1 bg-yellow-500 text-black p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:scale-110" title="Set as Cover">
+                                <Star size={12} />
+                            </button>
+                        )}
+                        
+                        {idx === 0 && (<div className="absolute bottom-0 inset-x-0 bg-blue-600 text-[10px] text-center py-1 font-bold tracking-widest z-10 text-white">COVER</div>)}
+                    </div>
+                ))}
               </div>
           </div>
-      </div>
 
-      {/* 3. MAIN CONTENT */}
-      <div className="max-w-5xl mx-auto px-6 py-12 space-y-16">
-        
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {listing.type === 'PROPERTY' ? (
-                    <>
-                        <StatCard icon={<BedDouble size={24}/>} label="Bedrooms" value={listing.bedrooms}/>
-                        <StatCard icon={<Bath size={24}/>} label="Bathrooms" value={listing.bathrooms}/>
-                        <StatCard icon={<CarFront size={24}/>} label="Car Parks" value={listing.carParks}/>
-                        <StatCard icon={<Maximize size={24}/>} label="Size" value={`${listing.sqft} sqft`}/>
-                    </>
-                ) : (
-                    <>
-                        <StatCard icon={<Calendar size={24}/>} label="Year" value={listing.year}/>
-                        <StatCard icon={<Gauge size={24}/>} label="Mileage" value={`${listing.mileage} km`}/>
-                        <StatCard icon={<Settings2 size={24}/>} label="Trans." value={listing.transmission}/>
-                        <StatCard icon={<Fuel size={24}/>} label="Fuel" value={listing.fuelType}/>
-                    </>
-                )}
-            </div>
+          {/* --- BASIC INFO --- */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 border-b border-white/5 pb-8">
+             <div className="col-span-2"><label className="label">Title</label><input name="title" value={formData.title} onChange={handleChange} className="input font-bold text-lg" /></div>
+             <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400 font-bold text-lg" /></div>
+             
+             {/* LOCATION */}
+             <div className="col-span-2 md:col-span-3"><label className="label">Project / Building Name</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon"/></div>
+             <div><label className="label">State</label><select name="state" value={formData.state} onChange={handleChange} className="input">{MALAYSIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
+             <div><label className="label">Area</label><input name="area" value={formData.area} onChange={handleChange} className="input" /></div>
+             
+             {/* MAP */}
+             <div className="col-span-2 md:col-span-3">
+                <MapPicker 
+                    onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
+                    initialLat={formData.lat} 
+                    initialLng={formData.lng} 
+                    searchQuery={`${formData.area}, ${formData.state}, Malaysia`}
+                />
+             </div>
 
-            <ImageGallery images={images} title={listing.title} />
+             <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32 leading-relaxed" /></div>
+          </div>
 
-            <div>
-                <h3 className="text-lg font-bold mb-6 flex items-center gap-2 text-white">Description</h3>
-                <div className="text-gray-300 whitespace-pre-line leading-relaxed text-lg">
-                    {listing.description}
+          {/* --- PROPERTY SPECIFIC --- */}
+          {formData.type === 'PROPERTY' && (
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label className="label">Type</label><select name="propertyType" value={formData.propertyType} onChange={handleChange} className="input">{PROPERTY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+                    <div><label className="label">Bedrooms</label><input name="bedrooms" type="number" value={formData.bedrooms} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Bathrooms</label><input name="bathrooms" type="number" value={formData.bathrooms} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Car Parks</label><input name="carParks" type="number" value={formData.carParks} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Size (Sq.ft)</label><input name="sqft" type="number" value={formData.sqft} onChange={handleChange} className="input" /></div>
+                    <div><label className="label">Furnishing</label><select name="furnishing" value={formData.furnishing} onChange={handleChange} className="input"><option>Fully Furnished</option><option>Partly Furnished</option><option>Unfurnished</option></select></div>
                 </div>
-            </div>
-
-            <div>
-                <h3 className="text-lg font-bold mb-6 border-l-4 border-blue-500 pl-3">Full Specifications</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-16 gap-y-4 text-sm bg-neutral-900/50 p-8 rounded-3xl border border-white/5">
-                    {listing.type === 'VEHICLE' ? (
-                        <>
-                            <Row label="Brand" value={listing.brand} />
-                            <Row label="Model" value={listing.model} />
-                            <Row label="Variant" value={listing.variant} />
-                            <Row label="Series" value={listing.series} />
-                            <Row label="Year" value={listing.year} />
-                            <Row label="Color" value={listing.color} />
-                            <Row label="Body Type" value={listing.bodyType} />
-                            <Row label="Seats" value={listing.seats} />
-                            <Row label="Origin" value={listing.origin} />
-                            <Row label="Engine CC" value={listing.engineCC} />
-                            <Row label="Power" value={listing.peakPower ? `${listing.peakPower} KW` : '-'} />
-                            <Row label="Torque" value={listing.peakTorque ? `${listing.peakTorque} Nm` : '-'} />
-                        </>
-                    ) : (
-                        <>
-                            <Row label="Category" value={listing.listingCategory} />
-                            <Row label="Property Type" value={listing.propertyType} />
-                            <Row label="Furnishing" value={listing.furnishing} />
-                            <Row label="Bedrooms" value={listing.bedrooms} />
-                            <Row label="Bathrooms" value={listing.bathrooms} />
-                            <Row label="Size" value={`${listing.sqft} sq.ft`} />
-                        </>
-                    )}
-                </div>
-            </div>
-
-            {listing.type === 'PROPERTY' && facilities.length > 0 && (
+                
                 <div>
-                    <h3 className="text-lg font-bold mb-6 border-l-4 border-purple-500 pl-3">Facilities</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                        {facilities.map((fac, i) => (
-                            <div key={i} className="flex items-center gap-3 text-sm text-gray-300 bg-neutral-900 px-4 py-3 rounded-xl border border-white/5">
-                                <CheckSquare size={16} className="text-green-500"/> {fac}
-                            </div>
+                    <h3 className="text-blue-500 text-xs font-bold uppercase tracking-widest mb-4">Facilities</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        {FACILITIES_LIST.map((facility) => (
+                            <button type="button" key={facility} onClick={() => toggleFacility(facility)} className={`px-4 py-3 rounded-xl text-xs font-bold border transition-all ${selectedFacilities.includes(facility) ? 'bg-blue-600 border-blue-500 text-white' : 'bg-neutral-800 border-neutral-700 text-gray-400 hover:bg-neutral-700'}`}>{selectedFacilities.includes(facility) ? <Check size={14} className="inline mr-2"/> : null}{facility}</button>
                         ))}
                     </div>
                 </div>
-            )}
-
-            {listing.lat && listing.lng && (
-                <div>
-                    <h3 className="text-lg font-bold mb-6 flex items-center gap-2">Location & Amenities</h3>
-                    <div className="bg-neutral-900 border border-white/10 p-1 rounded-3xl overflow-hidden">
-                         <LocationMap lat={listing.lat} lng={listing.lng} />
-                    </div>
-                </div>
-            )}
-
-            <div>
-                <LoanCalculator price={listing.price} type={listing.type as 'PROPERTY' | 'VEHICLE'} />
             </div>
+          )}
 
+          {/* --- VEHICLE SPECIFIC --- */}
+          {formData.type === 'VEHICLE' && (
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div><label className="label">Brand</label><input name="brand" value={formData.brand} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Model</label><input name="model" value={formData.model} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Variant</label><input name="variant" value={formData.variant} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Year</label><input type="number" name="year" value={formData.year} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Mileage</label><input type="number" name="mileage" value={formData.mileage} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Color</label><input name="color" value={formData.color} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Origin</label><select name="origin" value={formData.origin} onChange={handleChange} className="input"><option>Local</option><option>Japan</option><option>Others</option></select></div>
+                    <div><label className="label">Body</label><select name="bodyType" value={formData.bodyType} onChange={handleChange} className="input"><option>Sedan</option><option>SUV</option><option>MPV</option><option>4x4</option><option>Coupe</option><option>Others</option></select></div>
+                    <div><label className="label">Trans.</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option><option>CVT</option></select></div>
+                    <div><label className="label">Fuel</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option></select></div>
+                    <div><label className="label">Engine CC</label><input type="number" name="engineCC" value={formData.engineCC} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Power</label><input type="number" name="peakPower" value={formData.peakPower} onChange={handleChange} className="input"/></div>
+                    <div><label className="label">Torque</label><input type="number" name="peakTorque" value={formData.peakTorque} onChange={handleChange} className="input"/></div>
+                </div>
+            </div>
+          )}
+
+          <div className="pt-6 border-t border-white/5">
+            <button type="submit" disabled={saving} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20">
+                {saving ? <Loader2 className="animate-spin"/> : <Save size={20} />}
+                {saving ? "Saving Changes..." : "Update Listing"}
+            </button>
+          </div>
+
+        </form>
       </div>
-    </main>
+      <style jsx>{`
+        .label { display: block; font-size: 0.7rem; color: #9ca3af; font-weight: bold; text-transform: uppercase; margin-bottom: 0.25rem; }
+        .input { width: 100%; background: #171717; border: 1px solid #262626; padding: 0.75rem; border-radius: 0.75rem; color: white; outline: none; transition: 0.2s; }
+        .input:focus { border-color: #2563eb; background: #0a0a0a; }
+      `}</style>
+    </div>
   );
-}
-
-function StatCard({ icon, label, value }: any) {
-    if (!value) return null;
-    return (
-        <div className="bg-neutral-900 border border-white/10 rounded-2xl p-5 flex flex-col items-center justify-center text-center hover:bg-neutral-800 transition-colors">
-            <div className="text-blue-500 mb-2">{icon}</div>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">{label}</p>
-            <p className="text-xl font-bold text-white">{value}</p>
-        </div>
-    );
-}
-
-function Row({label, value}: any) {
-    if(!value) return null;
-    return (
-        <div className="flex justify-between border-b border-white/5 pb-3">
-            <span className="text-gray-500 font-medium">{label}</span>
-            <span className="text-white font-bold text-right uppercase">{value}</span>
-        </div>
-    )
 }

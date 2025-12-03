@@ -39,7 +39,6 @@ export default function SettingsPage() {
     });
   }, []);
 
-  // Handle Photo Upload to Supabase
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
@@ -67,7 +66,6 @@ export default function SettingsPage() {
     
     try {
         const form = new FormData(e.target as HTMLFormElement);
-        // Manually append the image URL because it's not a standard input
         form.append('profileImage', formData.profileImage);
         
         await updateProfile(form);
@@ -89,7 +87,8 @@ export default function SettingsPage() {
   if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 flex justify-center items-center font-sans">
+    // FIX: Added pt-28 to clear navbar
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 pt-28 flex justify-center items-center font-sans">
       <div className="max-w-2xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
         
         <div className="flex items-center gap-4 mb-8">
@@ -127,7 +126,6 @@ export default function SettingsPage() {
                 {uploading && <p className="text-xs text-blue-400 mt-2 animate-pulse">Uploading...</p>}
                 <p className="text-xs text-gray-500 mt-2 uppercase font-bold tracking-widest">Tap to Change Photo</p>
             </div>
-            {/* ------------------------------------ */}
 
             {/* Phone Number */}
             <div>

@@ -48,7 +48,7 @@ model Listing {
   title       String
   description String
   price       Float
-  type        String   // "PROPERTY" or "VEHICLE"
+  type        String   
   tags        String
   images      String
   location    String   @default("Malaysia")
@@ -60,18 +60,20 @@ model Listing {
   lat         Float?
   lng         Float?
   
-  // Status
+  // Status - MAKE SURE THIS IS LOWERCASE 's'
+  status      String   @default("ACTIVE") 
+  
   condition   String?
   verified    Boolean  @default(false)
   published   Boolean  @default(true)
   createdAt   DateTime @default(now())
 
-  // --- ANALYTICS ---
+  // Analytics
   views           Int      @default(0)
   whatsappClicks  Int      @default(0)
   callClicks      Int      @default(0)
   
-  // Property Specifics
+  // Property Fields
   bedrooms    Int?
   bathrooms   Int?
   sqft        Int?
@@ -81,7 +83,7 @@ model Listing {
   listingCategory String?
   facilities      String?
 
-  // Vehicle Specifics
+  // Vehicle Fields
   brand       String?
   model       String?
   year        Int?

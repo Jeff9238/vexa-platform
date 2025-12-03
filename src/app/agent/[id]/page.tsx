@@ -5,13 +5,12 @@ import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
 import { Phone, MessageCircle, Globe, CheckCircle, BedDouble, Car } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import ListingCard from "@/components/ListingCard"; // <--- NEW IMPORT
-import { currentUser } from "@clerk/nextjs/server"; // <--- NEW IMPORT
+import ListingCard from "@/components/ListingCard";
+import { currentUser } from "@clerk/nextjs/server";
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
-// Helper to get favorite IDs (Reuse logic)
 async function getMyFavoriteIds() {
     try {
         const user = await currentUser();
@@ -39,7 +38,7 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
         listings: {
             where: { published: true },
             orderBy: { createdAt: 'desc' },
-            include: { user: true } // ListingCard expects user data inside listing
+            include: { user: true }
         }
     }
   });
@@ -141,7 +140,7 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
             </div>
         </div>
 
-        {/* --- LISTINGS GRID (STANDARDIZED) --- */}
+        {/* --- LISTINGS GRID --- */}
         <h2 className={`text-3xl font-bold mb-8 flex items-center gap-3 ${serifFont.className}`}>
              Active Listings <span className="text-lg text-gray-500 font-sans font-normal">({agent.listings.length})</span>
         </h2>
@@ -152,7 +151,6 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
                     Agent has no active listings at the moment.
                 </div>
             ) : agent.listings.map((item) => (
-                // --- USING NEW COMPONENT HERE ---
                 <ListingCard 
                     key={item.id} 
                     data={item} 

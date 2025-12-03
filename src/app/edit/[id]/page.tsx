@@ -3,12 +3,13 @@
 import { useEffect, useState, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { getListing, updateListing } from '@/app/actions';
-import { ArrowLeft, Loader2, Save, Check, Upload, X, Star, Home, Car } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Check, Upload, X, Star } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@supabase/supabase-js';
 import Image from 'next/image';
 import MapPicker from '@/components/MapPicker';
 
+// Initialize Supabase Client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -18,7 +19,7 @@ const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah",
 const PROPERTY_TYPES = ["Terrace", "Condo", "Bungalow", "Semi-D", "Apartment", "Townhouse", "Shoplot", "Office", "Factory", "Warehouse", "Land", "Hotel"];
 const FACILITIES_LIST = ["Swimming Pool", "Gymnasium", "24H Security", "Parking", "Elevator", "Playground", "Balcony", "Aircon", "Wifi", "Kitchen Cabinet", "Near MRT/LRT", "Garden"];
 
-// Helper Type for Hybrid Gallery (Old URLs + New Files)
+// Helper Type for Gallery
 type ImageItem = {
     id: string;
     url: string;
@@ -33,17 +34,13 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [selectedFacilities, setSelectedFacilities] = useState<string[]>([]);
-  
-  // Hybrid Gallery State
   const [gallery, setGallery] = useState<ImageItem[]>([]);
 
   const [formData, setFormData] = useState({
     title: '', description: '', price: '', 
     area: '', state: '', locationName: '',
     lat: null as number | null, lng: null as number | null, 
-    
-    type: 'PROPERTY', tags: '', condition: '',
-    listingCategory: '',
+    type: 'PROPERTY', tags: '', condition: '', listingCategory: '', status: 'ACTIVE',
     
     // Property
     propertyType: '', bedrooms: '', bathrooms: '', carParks: '', sqft: '', furnishing: '',
@@ -54,7 +51,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     engineCC: '', peakPower: '', peakTorque: ''
   });
 
-  // 1. Load Data
+  // 1. Load Data on Mount
   useEffect(() => {
     getListing(id).then((data: any) => {
       if (data) {
@@ -74,6 +71,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
           tags: data.tags || '',
           condition: data.condition || '',
           listingCategory: data.listingCategory || '',
+          status: data.status || 'ACTIVE',
           
           // Property
           propertyType: data.propertyType || '',
@@ -101,19 +99,16 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
           peakTorque: data.peakTorque?.toString() || ''
         });
 
-        // Load Facilities
         if (data.facilities) {
             setSelectedFacilities(data.facilities.split(','));
         }
 
-        // Load Images into Gallery State
         if (data.images) {
             const urls = data.images.split(',');
-            const initialGallery = urls.map((url: string) => ({
+            setGallery(urls.map((url: string) => ({
                 id: Math.random().toString(36),
                 url: url
-            }));
-            setGallery(initialGallery);
+            })));
         }
       }
       setLoading(false);
@@ -128,7 +123,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     const newItems: ImageItem[] = newFiles.map(file => ({
         id: Math.random().toString(36),
         url: URL.createObjectURL(file),
-        file: file // Mark as new
+        file: file
     }));
 
     setGallery(prev => [...prev, ...newItems].slice(0, 8)); // Max 8
@@ -159,46 +154,41 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
     }
   };
 
-  const handleLocationSelect = (lat: number, lng: number) => {
-    setFormData(prev => ({ ...prev, lat, lng }));
-  };
-
-  // --- SAVE HANDLER ---
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (gallery.length === 0) return alert("Please keep at least one photo.");
     setSaving(true);
 
     try {
-        // 1. Process Images (Upload new ones, keep old ones)
+        // 1. Upload New Images
         const finalImageUrls: string[] = [];
 
         for (const item of gallery) {
             if (item.file) {
-                // New file -> Upload
                 const name = `${Date.now()}-${Math.random().toString(36).substring(7)}-${item.file.name}`;
                 const { error } = await supabase.storage.from('vexa-images').upload(name, item.file);
                 if (error) throw error;
                 const { data } = supabase.storage.from('vexa-images').getPublicUrl(name);
                 finalImageUrls.push(data.publicUrl);
             } else {
-                // Old URL -> Keep
                 finalImageUrls.push(item.url);
             }
         }
 
-        // 2. Build Form Data
+        // 2. Submit Data
         const submitData = new FormData();
         submitData.append('id', id);
+        
+        // Append all standard fields
         Object.entries(formData).forEach(([key, value]) => {
              if (value !== null) submitData.append(key, value.toString());
         });
+        
         submitData.append('facilities', selectedFacilities.join(','));
         submitData.append('imageUrl', finalImageUrls.join(','));
 
-        // 3. Update
         await updateListing(submitData);
-        alert("Updated Successfully!");
+        alert("Listing Updated Successfully!");
         router.push('/dashboard');
         router.refresh();
 
@@ -213,25 +203,34 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
   if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-6 flex justify-center items-center font-sans">
+    <div className="min-h-screen bg-[#0a0a0a] text-white p-6 pt-28 flex justify-center items-center font-sans">
       <div className="max-w-5xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
         
-        <div className="flex items-center gap-4 mb-8">
-           <Link href="/dashboard" className="p-2 bg-white/5 rounded-full hover:bg-white/10"><ArrowLeft size={20}/></Link>
-           <h1 className="text-3xl font-bold">Edit Listing</h1>
-           <span className="text-xs bg-blue-900 text-blue-200 px-3 py-1 rounded uppercase font-bold tracking-wider">{formData.type}</span>
+        <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+               <Link href="/dashboard" className="p-2 bg-white/5 rounded-full hover:bg-white/10"><ArrowLeft size={20}/></Link>
+               <div>
+                   <h1 className="text-3xl font-bold">Edit Listing</h1>
+                   <p className="text-xs text-gray-500 uppercase tracking-widest font-bold">Update details & photos</p>
+               </div>
+            </div>
+            
+            {/* Status Badge */}
+            <div className={`px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-widest ${formData.status === 'SOLD' ? 'bg-red-900/30 text-red-400 border border-red-900/50' : 'bg-green-900/30 text-green-400 border border-green-900/50'}`}>
+                {formData.status}
+            </div>
         </div>
 
         <form onSubmit={handleUpdate} className="space-y-8">
 
-          {/* --- IMAGE MANAGER --- */}
+          {/* --- PHOTOS --- */}
           <div className="space-y-2">
               <label className="label">Manage Photos (Max 8)</label>
               <div className="grid grid-cols-4 gap-4">
                 {gallery.length < 8 && (
-                    <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer">
+                    <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer transition-colors bg-white/5 hover:bg-white/10">
                         <input type="file" multiple onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
-                        <Upload className="text-blue-500" />
+                        <Upload className="text-gray-500" />
                     </div>
                 )}
                 
@@ -239,13 +238,17 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
                     <div key={item.id} className={`relative aspect-square bg-neutral-800 rounded-xl overflow-hidden border group transition-all ${idx === 0 ? 'border-blue-500 ring-2 ring-blue-500/20' : 'border-white/10'}`}>
                         <Image src={item.url} alt="Preview" fill className="object-cover" />
                         
-                        <button type="button" onClick={() => removeImage(item.id)} className="absolute top-1 right-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600 z-20">
+                        <button type="button" onClick={() => removeImage(item.id)} className="absolute top-1 right-1 bg-red-600 text-white p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:scale-110">
                             <X size={12} />
                         </button>
 
-                        {idx !== 0 && (<button type="button" onClick={() => setAsCover(idx)} className="absolute top-1 left-1 bg-black/60 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity hover:bg-yellow-500 z-20" title="Set as Cover"><Star size={12} /></button>)}
+                        {idx !== 0 && (
+                            <button type="button" onClick={() => setAsCover(idx)} className="absolute top-1 left-1 bg-yellow-500 text-black p-1.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:scale-110" title="Set as Cover">
+                                <Star size={12} />
+                            </button>
+                        )}
                         
-                        {idx === 0 && (<div className="absolute bottom-0 inset-x-0 bg-blue-600 text-[10px] text-center py-1 font-bold tracking-widest z-10">COVER</div>)}
+                        {idx === 0 && (<div className="absolute bottom-0 inset-x-0 bg-blue-600 text-[10px] text-center py-1 font-bold tracking-widest z-10 text-white">COVER</div>)}
                     </div>
                 ))}
               </div>
@@ -253,36 +256,25 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
 
           {/* --- BASIC INFO --- */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 border-b border-white/5 pb-8">
-             <div className="col-span-2"><label className="label">Title</label><input name="title" value={formData.title} onChange={handleChange} className="input font-bold" /></div>
-             <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400 font-bold" /></div>
+             <div className="col-span-2"><label className="label">Title</label><input name="title" value={formData.title} onChange={handleChange} className="input font-bold text-lg" /></div>
+             <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400 font-bold text-lg" /></div>
              
              {/* LOCATION */}
-             <div className="col-span-2 md:col-span-3"><label className="label">Building / Project Name</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon"/></div>
+             <div className="col-span-2 md:col-span-3"><label className="label">Project / Building Name</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon"/></div>
              <div><label className="label">State</label><select name="state" value={formData.state} onChange={handleChange} className="input">{MALAYSIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
              <div><label className="label">Area</label><input name="area" value={formData.area} onChange={handleChange} className="input" /></div>
              
              {/* MAP */}
              <div className="col-span-2 md:col-span-3">
-                <div className="col-span-2 md:col-span-3">
                 <MapPicker 
-                    onLocationSelect={handleLocationSelect}
-                    initialLat={formData.lat} // Show existing pin
-                    initialLng={formData.lng} // Show existing pin
+                    onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
+                    initialLat={formData.lat} 
+                    initialLng={formData.lng} 
                     searchQuery={`${formData.area}, ${formData.state}, Malaysia`}
                 />
-                {formData.lat && <p className="text-xs text-green-400 mt-2">✓ Saved Location: {formData.lat.toFixed(4)}, {formData.lng?.toFixed(4)}</p>}
-             </div>
-                {formData.lat && <p className="text-xs text-green-400 mt-2">✓ Saved Location: {formData.lat.toFixed(4)}, {formData.lng?.toFixed(4)} (Click map to change)</p>}
              </div>
 
-             {formData.type === 'PROPERTY' && (
-                 <div><label className="label">Category</label><select name="listingCategory" value={formData.listingCategory} onChange={handleChange} className="input"><option>SALE</option><option>RENT</option></select></div>
-             )}
-             {formData.type === 'VEHICLE' && (
-                 <div><label className="label">Condition</label><select name="condition" value={formData.condition} onChange={handleChange} className="input"><option>Recon</option><option>Used</option><option>New</option></select></div>
-             )}
-
-             <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32" /></div>
+             <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32 leading-relaxed" /></div>
           </div>
 
           {/* --- PROPERTY SPECIFIC --- */}
@@ -321,7 +313,7 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
                     <div><label className="label">Origin</label><select name="origin" value={formData.origin} onChange={handleChange} className="input"><option>Local</option><option>Japan</option><option>Others</option></select></div>
                     <div><label className="label">Body</label><select name="bodyType" value={formData.bodyType} onChange={handleChange} className="input"><option>Sedan</option><option>SUV</option><option>MPV</option><option>4x4</option><option>Coupe</option><option>Others</option></select></div>
                     <div><label className="label">Trans.</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option><option>CVT</option></select></div>
-                    <div><label className="label">Fuel</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option></select></div>
+                    <div><label className="label">Fuel</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option><option>EV</option></select></div>
                     <div><label className="label">Engine CC</label><input type="number" name="engineCC" value={formData.engineCC} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Power</label><input type="number" name="peakPower" value={formData.peakPower} onChange={handleChange} className="input"/></div>
                     <div><label className="label">Torque</label><input type="number" name="peakTorque" value={formData.peakTorque} onChange={handleChange} className="input"/></div>
@@ -329,17 +321,19 @@ export default function EditPage({ params }: { params: Promise<{ id: string }> }
             </div>
           )}
 
-          <button type="submit" disabled={saving} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl mt-4 flex items-center justify-center gap-2">
-            {saving ? <Loader2 className="animate-spin"/> : <Save />}
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
+          <div className="pt-6 border-t border-white/5">
+            <button type="submit" disabled={saving} className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-xl mt-4 flex items-center justify-center gap-2">
+                {saving ? <Loader2 className="animate-spin"/> : <Save size={20} />}
+                {saving ? "Saving Changes..." : "Update Listing"}
+            </button>
+          </div>
 
         </form>
       </div>
       <style jsx>{`
-        .label { display: block; font-size: 0.7rem; color: #6b7280; font-weight: bold; text-transform: uppercase; margin-bottom: 0.25rem; }
+        .label { display: block; font-size: 0.7rem; color: #9ca3af; font-weight: bold; text-transform: uppercase; margin-bottom: 0.25rem; }
         .input { width: 100%; background: #171717; border: 1px solid #262626; padding: 0.75rem; border-radius: 0.75rem; color: white; outline: none; transition: 0.2s; }
-        .input:focus { border-color: #2563eb; }
+        .input:focus { border-color: #2563eb; background: #0a0a0a; }
       `}</style>
     </div>
   );

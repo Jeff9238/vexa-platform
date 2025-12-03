@@ -2,8 +2,8 @@ import { prisma } from "@/lib/prisma";
 import Image from "next/image";
 import Link from "next/link";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, Trash2, Wallet, Plus, Pencil, MapPin, Eye, MessageCircle, Phone, TrendingUp, Car, Home } from "lucide-react";
-import { deleteListing } from "../actions";
+import { ArrowLeft, Trash2, Wallet, Plus, Pencil, MapPin, Eye, MessageCircle, Phone, TrendingUp, Car, Home, CheckCircle2, CircleDashed } from "lucide-react";
+import { deleteListing, toggleListingStatus } from "../actions";
 import { currentUser } from "@clerk/nextjs/server"; 
 import { redirect } from "next/navigation";
 import AICoachModal from "@/components/AICoachModal"; 
@@ -37,15 +37,17 @@ export default async function Dashboard() {
   const totalLeads = me.listings.reduce((acc, l) => acc + l.whatsappClicks + l.callClicks, 0);
 
   return (
-    <div className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className} p-6`}>
+    <div className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className} p-6 pt-28`}>
       
       {/* HEADER */}
-      <header className="max-w-6xl mx-auto flex justify-between items-center mb-12 mt-4">
-        <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors">
-            <ArrowLeft size={20}/> Back to Home
-        </Link>
-        <h1 className={`text-2xl font-bold ${serifFont.className}`}>Agent Dashboard</h1>
-        <div className="w-10 h-10 rounded-full bg-gray-800 overflow-hidden border border-white/20">
+      <header className="max-w-6xl mx-auto flex justify-between items-center mb-12">
+        <div>
+            <Link href="/" className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors mb-2">
+                <ArrowLeft size={16}/> Back to Home
+            </Link>
+            <h1 className={`text-3xl font-bold ${serifFont.className}`}>Agent Dashboard</h1>
+        </div>
+        <div className="w-12 h-12 rounded-full bg-gray-800 overflow-hidden border border-white/20">
             <img src={me.profileImage || clerkUser.imageUrl} alt="Profile" className="w-full h-full object-cover"/>
         </div>
       </header>
@@ -138,10 +140,12 @@ export default async function Dashboard() {
   );
 }
 
-// Sub-component for Cleaner Code
+// --- SUB-COMPONENT: DASHBOARD CARD ---
 function DashboardListingCard({ item }: { item: any }) {
+    const isSold = item.status === 'SOLD'; // Check Status
+
     return (
-        <div className="bg-neutral-900 border border-white/5 p-6 rounded-2xl flex flex-col gap-6 group hover:border-white/20 transition-all">
+        <div className={`border p-6 rounded-2xl flex flex-col gap-6 group transition-all ${isSold ? 'bg-neutral-900/50 border-white/5' : 'bg-neutral-900 border-white/5 hover:border-white/20'}`}>
             
             {/* Top Row: Info */}
             <div className="flex gap-4">
@@ -150,11 +154,16 @@ function DashboardListingCard({ item }: { item: any }) {
                         src={item.images ? item.images.split(',')[0] : 'https://via.placeholder.com/150'} 
                         alt="Thumb" 
                         fill 
-                        className="object-cover"
+                        className={`object-cover ${isSold ? 'grayscale opacity-50' : ''}`} // Dim if sold
                     />
+                    {isSold && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="text-[10px] font-bold text-white uppercase tracking-widest bg-black/80 px-2 py-1 rounded border border-white/10">Sold</span>
+                        </div>
+                    )}
                 </div>
                 <div className="flex-grow min-w-0">
-                    <h4 className="font-bold text-lg line-clamp-1 text-white">{item.title}</h4>
+                    <h4 className={`font-bold text-lg line-clamp-1 ${isSold ? 'text-gray-500 line-through' : 'text-white'}`}>{item.title}</h4>
                     <p className="text-blue-400 font-bold text-sm mb-2">RM {item.price.toLocaleString()}</p>
                     <div className="flex items-center gap-4 text-xs text-gray-500">
                         <span className="flex items-center gap-1"><MapPin size={12}/> {item.location}</span>
@@ -164,6 +173,26 @@ function DashboardListingCard({ item }: { item: any }) {
                 
                 {/* Actions Dropdown / Buttons */}
                 <div className="flex flex-col gap-2">
+                    
+                    {/* --- SOLD TOGGLE BUTTON --- */}
+                    <form action={async () => {
+                        'use server'
+                        await toggleListingStatus(item.id, isSold ? 'ACTIVE' : 'SOLD')
+                    }}>
+                        <button 
+                            className={`p-2 rounded-lg transition-all text-center flex items-center gap-2 text-xs font-bold w-full justify-center ${
+                                isSold 
+                                ? 'bg-green-900/20 text-green-500 border border-green-900/50' 
+                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                            }`}
+                            title={isSold ? "Mark as Active" : "Mark as Sold"}
+                        >
+                            {isSold ? <CheckCircle2 size={16}/> : <CircleDashed size={16}/>}
+                            {isSold ? "SOLD" : "ACTIVE"}
+                        </button>
+                    </form>
+                    {/* --------------------------- */}
+
                     <Link href={`/edit/${item.id}`} className="p-2 bg-white/5 text-gray-400 rounded-lg hover:bg-white/10 hover:text-white transition-all text-center" title="Edit">
                         <Pencil size={16}/>
                     </Link>
@@ -180,8 +209,6 @@ function DashboardListingCard({ item }: { item: any }) {
 
             {/* Bottom Row: Analytics Bar */}
             <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                
-                {/* Stats */}
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-2 text-sm text-gray-400" title="Total Page Views">
                         <Eye size={16}/> <span className="font-bold text-white">{item.views}</span>
@@ -194,9 +221,8 @@ function DashboardListingCard({ item }: { item: any }) {
                     </div>
                 </div>
 
-                {/* AI Coach Button */}
-                <AICoachModal listingId={item.id} />
-
+                {/* AI Coach (Only if active) */}
+                {!isSold && <AICoachModal listingId={item.id} />}
             </div>
 
         </div>

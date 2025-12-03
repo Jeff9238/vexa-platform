@@ -3,10 +3,10 @@ import { currentUser } from "@clerk/nextjs/server";
 import { Playfair_Display, Manrope } from 'next/font/google';
 import Navbar from "@/components/Navbar"; 
 import HeroSearch from "@/components/HeroSearch"; 
-import CategoryIcons from "@/components/CategoryIcons"; // <--- NEW
-import ListingCarousel from "@/components/ListingCarousel"; // <--- NEW
-import NewsSection from "@/components/NewsSection"; // <--- NEW
-import TrustedAgents from "@/components/TrustedAgents"; // <--- NEW
+import CategoryIcons from "@/components/CategoryIcons"; 
+import ListingCarousel from "@/components/ListingCarousel"; 
+import NewsSection from "@/components/NewsSection"; 
+import TrustedAgents from "@/components/TrustedAgents"; 
 import Link from "next/link";
 import { Plus } from "lucide-react";
 
@@ -28,7 +28,7 @@ async function getMyFavorites() {
 
 async function getHomePageData() {
     const freshListings = await prisma.listing.findMany({
-        where: { published: true },
+        where: { published: true, status: 'ACTIVE' },
         include: { user: true },
         orderBy: { createdAt: 'desc' }, 
         take: 10 
@@ -38,6 +38,7 @@ async function getHomePageData() {
     const premiumListings = await prisma.listing.findMany({
         where: { 
             published: true,
+            status: 'ACTIVE',
             OR: [
                 { type: 'PROPERTY', price: { gte: 1000000 } },
                 { type: 'VEHICLE', price: { gte: 200000 } }
@@ -65,14 +66,16 @@ export default async function Home() {
       
       <Navbar />
 
-      {/* 1. HERO SECTION (Redesigned) */}
-      <section className="relative h-[650px] w-full flex items-center justify-center overflow-hidden">
+      {/* 1. HERO SECTION (FIXED LAYOUT) */}
+      {/* Changed h-[650px] to min-h-[850px] to accommodate taller search boxes */}
+      {/* Changed justify-center to justify-start + pt-48 to lock title position */}
+      <section className="relative min-h-[850px] w-full flex flex-col items-center justify-start pt-48 overflow-hidden">
         <div className="absolute inset-0 z-0">
            <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1600607686527-6fb886090705?q=80&w=2700&auto=format&fit=crop')] bg-cover bg-center grayscale opacity-30 scale-105 animate-[pulse_10s_ease-in-out_infinite]"></div>
            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-[#0a0a0a]/60 to-black/30" />
         </div>
         
-        <div className="relative z-10 text-center max-w-5xl px-6 w-full mt-16">
+        <div className="relative z-10 text-center max-w-5xl px-6 w-full">
            <h1 className={`text-5xl md:text-7xl text-white leading-tight mb-6 ${serifFont.className}`}>
                Find Your <span className="text-blue-500 italic">VEXA.</span>
            </h1>

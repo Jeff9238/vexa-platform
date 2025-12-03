@@ -7,6 +7,23 @@ import { revalidatePath } from "next/cache";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
+// --- NEW: TOGGLE SOLD STATUS ---
+export async function toggleListingStatus(id: string, newStatus: 'ACTIVE' | 'SOLD') {
+  const user = await getAuthenticatedUser();
+  
+  const listing = await prisma.listing.findUnique({ where: { id } });
+  if (!listing || listing.userId !== user.id) throw new Error("Unauthorized");
+
+  await prisma.listing.update({
+    where: { id },
+    data: { status: newStatus }
+  });
+
+  revalidatePath('/dashboard');
+  revalidatePath(`/agent/${user.id}`);
+  return { success: true };
+}
+
 // --- HELPER: Get Authenticated User ---
 async function getAuthenticatedUser() {
   const clerkUser = await currentUser();
