@@ -3,11 +3,31 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, MapPin, Phone, MessageCircle, Globe, CheckCircle, BedDouble, Car, ArrowRight } from "lucide-react";
+import { Phone, MessageCircle, Globe, CheckCircle, BedDouble, Car } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import ListingCard from "@/components/ListingCard"; // <--- NEW IMPORT
+import { currentUser } from "@clerk/nextjs/server"; // <--- NEW IMPORT
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
+
+// Helper to get favorite IDs (Reuse logic)
+async function getMyFavoriteIds() {
+    try {
+        const user = await currentUser();
+        if (!user || !user.emailAddresses[0]) return [];
+        
+        const dbUser = await prisma.user.findUnique({
+            where: { email: user.emailAddresses[0].emailAddress },
+            include: { favorites: true }
+        });
+        
+        if (!dbUser) return [];
+        return dbUser.favorites.map(fav => fav.listingId);
+    } catch (e) {
+        return [];
+    }
+}
 
 export default async function AgentProfile({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -18,12 +38,16 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
     include: {
         listings: {
             where: { published: true },
-            orderBy: { createdAt: 'desc' }
+            orderBy: { createdAt: 'desc' },
+            include: { user: true } // ListingCard expects user data inside listing
         }
     }
   });
 
   if (!agent) notFound();
+
+  // 2. Fetch Favorites
+  const myFavs = await getMyFavoriteIds();
 
   // Stats
   const propertyCount = agent.listings.filter(l => l.type === 'PROPERTY').length;
@@ -41,20 +65,26 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
       <main className="max-w-6xl mx-auto px-6 py-32">
         
         {/* --- PROFILE HEADER --- */}
-        <div className="bg-neutral-900 border border-white/10 rounded-3xl p-8 md:p-12 mb-16 flex flex-col md:flex-row gap-10 items-center md:items-start relative overflow-hidden">
+        <div className="bg-neutral-900 border border-white/10 rounded-3xl p-8 md:p-12 mb-16 flex flex-col md:flex-row gap-10 items-center md:items-start relative overflow-hidden shadow-2xl">
             
             {/* Background Decor */}
             <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none"></div>
 
             {/* Avatar */}
             <div className="relative w-40 h-40 flex-shrink-0">
-                <div className="w-full h-full rounded-full overflow-hidden border-4 border-neutral-800 shadow-2xl relative z-10">
-                    <Image 
-                        src={agent.profileImage || "https://via.placeholder.com/200?text=Agent"} 
-                        alt={agent.name || "Agent"} 
-                        fill 
-                        className="object-cover"
-                    />
+                <div className="w-full h-full rounded-full overflow-hidden border-4 border-neutral-800 shadow-2xl relative z-10 bg-neutral-800">
+                    {agent.profileImage ? (
+                        <Image 
+                            src={agent.profileImage} 
+                            alt={agent.name || "Agent"} 
+                            fill 
+                            className="object-cover"
+                        />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-gray-500 bg-neutral-800">
+                            {agent.name?.substring(0,1).toUpperCase()}
+                        </div>
+                    )}
                 </div>
                 {/* Verified Badge */}
                 <div className="absolute bottom-2 right-2 z-20 bg-blue-600 text-white p-1.5 rounded-full border-4 border-neutral-900" title="Verified Agent">
@@ -95,7 +125,7 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
             </div>
 
             {/* Stats Box */}
-            <div className="bg-black/40 backdrop-blur-md border border-white/5 rounded-2xl p-6 min-w-[200px] text-center">
+            <div className="bg-black/40 backdrop-blur-md border border-white/5 rounded-2xl p-6 min-w-[200px] text-center hidden md:block">
                 <div className="text-gray-500 text-xs uppercase font-bold tracking-widest mb-4">Active Listings</div>
                 <div className="flex justify-around gap-6">
                     <div>
@@ -111,7 +141,7 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
             </div>
         </div>
 
-        {/* --- LISTINGS GRID --- */}
+        {/* --- LISTINGS GRID (STANDARDIZED) --- */}
         <h2 className={`text-3xl font-bold mb-8 flex items-center gap-3 ${serifFont.className}`}>
              Active Listings <span className="text-lg text-gray-500 font-sans font-normal">({agent.listings.length})</span>
         </h2>
@@ -122,26 +152,12 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
                     Agent has no active listings at the moment.
                 </div>
             ) : agent.listings.map((item) => (
-                <Link key={item.id} href={`/listing/${item.id}`} className="group bg-neutral-900 border border-white/5 rounded-xl overflow-hidden hover:border-blue-500/30 transition-all">
-                    <div className="relative h-[240px] w-full overflow-hidden">
-                        <Image src={item.images ? item.images.split(',')[0] : 'https://via.placeholder.com/400'} alt={item.title} fill className="object-cover group-hover:scale-105 transition-transform duration-700" />
-                        <div className="absolute top-3 left-3 bg-black/60 backdrop-blur text-white p-1.5 rounded-lg text-xs font-bold uppercase">
-                            {item.type}
-                        </div>
-                        <div className="absolute bottom-3 left-3">
-                             <p className={`text-lg font-semibold text-white ${serifFont.className}`}>
-                                RM {item.price.toLocaleString()}
-                             </p>
-                        </div>
-                    </div>
-                    <div className="p-4">
-                        <h4 className="text-sm font-bold text-white mb-2 line-clamp-1">{item.title}</h4>
-                        <div className="pt-3 border-t border-white/5 flex justify-between items-center text-xs text-gray-500">
-                            <span className="flex items-center gap-1"><MapPin size={10}/> {item.area}, {item.state}</span>
-                            <span className="flex items-center gap-1 text-blue-400 group-hover:translate-x-1 transition-transform">View Details <ArrowRight size={10}/></span>
-                        </div>
-                    </div>
-                </Link>
+                // --- USING NEW COMPONENT HERE ---
+                <ListingCard 
+                    key={item.id} 
+                    data={item} 
+                    isLiked={myFavs.includes(item.id)} 
+                />
             ))}
         </div>
 

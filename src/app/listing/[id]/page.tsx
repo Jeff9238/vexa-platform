@@ -3,12 +3,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, MapPin, Share2, MessageCircle, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ImageIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { MapPin, Share2, Phone, CheckCircle, BedDouble, Bath, Maximize, Home, Calendar, Gauge, Settings2, Fuel, CheckSquare, CarFront, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import ImageGallery from "@/components/ImageGallery"; 
 import LocationMap from "@/components/LocationMap";
 import FavoriteButton from "@/components/FavoriteButton"; 
 import LoanCalculator from "@/components/LoanCalculator"; 
-import { getFavoriteStatus, incrementView } from "@/app/actions"; // <--- Added incrementView
+import { getFavoriteStatus, incrementView } from "@/app/actions"; 
 import SearchInput from "@/components/SearchInput"; 
 import { Suspense } from "react"; 
 
@@ -36,7 +36,7 @@ export default async function ListingPage({
   // 2. Track View (Analytics)
   await incrementView(id);
 
-  // --- NAVIGATION LOGIC (NEXT/PREV) ---
+  // --- NAVIGATION LOGIC ---
   const typeFilter = typeof sp.type === 'string' ? sp.type : listing.type;
   
   const whereClause: any = {
@@ -96,11 +96,10 @@ export default async function ListingPage({
     <main className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
       
       {/* CUSTOM LISTING HEADER */}
-      {/* z-[100] ensures it sits on top of everything including global nav */}
       <nav className="fixed top-0 w-full z-[100] px-4 md:px-6 py-4 flex justify-between items-center bg-black/80 backdrop-blur-xl border-b border-white/10">
         
-        {/* LEFT: VEXA LOGO (Back to Home) */}
-        <Link href="/" className="pointer-events-auto group flex-shrink-0">
+        {/* LEFT: VEXA LOGO */}
+        <Link href="/" className="pointer-events-auto group flex-shrink-0 mr-2 md:mr-0">
             <div className="relative w-10 h-10 md:w-12 md:h-12 overflow-hidden rounded-2xl shadow-xl shadow-black/50 border border-white/10 bg-white hover:scale-105 transition-transform flex items-center justify-center"> 
                 <Image 
                     src="/vexa.jpg" 
@@ -112,21 +111,44 @@ export default async function ListingPage({
         </Link>
 
         {/* MIDDLE: SEARCH BAR */}
-        <div className="flex-1 max-w-xl mx-2 md:mx-4 pointer-events-auto">
+        <div className="flex-1 max-w-xl mx-2 md:mx-4 pointer-events-auto min-w-0">
              <Suspense fallback={<div className="h-12 w-full bg-white/5 rounded-2xl animate-pulse"></div>}>
                 <SearchInput />
              </Suspense>
         </div>
         
-        {/* RIGHT: ACTIONS (Heart & Share) */}
-        <div className="flex items-center gap-2 pointer-events-auto bg-black/60 backdrop-blur-xl border border-white/10 rounded-full p-1.5 shadow-2xl flex-shrink-0">
-            <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition-colors">
-                <FavoriteButton listingId={listing.id} initialLiked={isLiked} />
+        {/* RIGHT SECTION: ACTIONS */}
+        <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
+            
+            {/* Desktop-Only Agent Info in Header (Hidden on Mobile) */}
+            <div className="hidden md:flex items-center gap-3">
+                <Link href={`/agent/${listing.user.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity group pointer-events-auto">
+                    <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-sm border border-white/20 overflow-hidden relative shadow-lg">
+                        {listing.user.profileImage ? (
+                            <Image src={listing.user.profileImage} alt="Agent" fill className="object-cover"/>
+                        ) : (
+                            listing.user.name?.substring(0,2).toUpperCase()
+                        )}
+                    </div>
+                    <div>
+                        <p className="text-sm font-bold text-white leading-none mb-1 group-hover:text-blue-400 transition-colors">{listing.user.name}</p>
+                        <p className="text-[10px] text-blue-400 font-bold flex items-center gap-1"><CheckCircle size={10}/> Verified Agent</p>
+                    </div>
+                </Link>
+                <div className="w-[1px] h-10 bg-white/10"></div>
             </div>
-            <div className="w-[1px] h-6 bg-white/20"></div>
-            <button className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:text-blue-400 hover:bg-white/10 transition-colors">
-                <Share2 size={20}/>
-            </button>
+
+            {/* ACTION BUTTONS (Heart & Share) */}
+            <div className="flex items-center gap-2 pointer-events-auto bg-black/60 backdrop-blur-xl border border-white/10 rounded-full p-1.5 shadow-2xl">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/10 transition-colors">
+                    <FavoriteButton listingId={listing.id} initialLiked={isLiked} />
+                </div>
+                <div className="w-[1px] h-6 bg-white/20 hidden md:block"></div>
+                <button className="w-10 h-10 flex items-center justify-center rounded-full text-white hover:text-blue-400 hover:bg-white/10 transition-colors hidden md:flex">
+                    <Share2 size={20}/>
+                </button>
+            </div>
+
         </div>
       </nav>
 
@@ -147,8 +169,10 @@ export default async function ListingPage({
                  <ChevronRight size={24}/>
              </Link>
          )}
+         {/* ---------------------------------------- */}
          
          <div className="absolute bottom-0 left-0 w-full px-6 md:px-12 pb-12 max-w-7xl mx-auto">
+            
             <div className="flex gap-2 mb-4">
                 <span className="bg-orange-600 text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg">{listing.condition || 'USED'}</span>
                 {listing.listingCategory && (
@@ -165,32 +189,36 @@ export default async function ListingPage({
          </div>
       </div>
 
-      {/* 2. SLIM ACTION BAR */}
+      {/* 2. SLIM ACTION BAR (Below Hero) */}
       <div className="sticky top-0 z-40 bg-[#0a0a0a]/90 backdrop-blur-xl border-b border-white/10 shadow-2xl">
           <div className="max-w-7xl mx-auto px-6 md:px-12 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-center gap-8">
+              <div className="flex items-center gap-4 md:gap-6">
                   <div>
                       <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mb-0.5">Price</p>
                       <div className="text-3xl md:text-4xl font-bold text-white font-serif">RM {listing.price.toLocaleString()}</div>
                   </div>
-                  
-                  <div className="hidden md:block w-[1px] h-10 bg-white/10"></div>
-                  
-                  <div className="hidden md:flex items-center gap-3">
-                      <Link href={`/agent/${listing.user.id}`} className="flex items-center gap-3 hover:opacity-80 transition-opacity group">
-                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center font-bold text-white text-sm border border-white/20 overflow-hidden relative">
-                              {listing.user.profileImage ? (
-                                  <Image src={listing.user.profileImage} alt="Agent" fill className="object-cover"/>
-                              ) : (
-                                  listing.user.name?.substring(0,2).toUpperCase()
-                              )}
-                          </div>
-                          <div>
-                              <p className="text-sm font-bold text-white leading-none mb-1 group-hover:text-blue-400 transition-colors">{listing.user.name}</p>
-                              <p className="text-[10px] text-blue-400 font-bold flex items-center gap-1"><CheckCircle size={10}/> Verified Agent</p>
-                          </div>
-                      </Link>
+
+                  {/* --- AGENT CHIP (VISIBLE ON ALL SCREENS) --- */}
+                  <div>
+                    <Link href={`/agent/${listing.user.id}`} className="inline-flex items-center gap-3 bg-white/5 hover:bg-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-full border border-white/10 transition-all group pointer-events-auto">
+                        <div className="relative w-6 h-6 md:w-8 md:h-8 rounded-full overflow-hidden border border-white/20">
+                            {listing.user.profileImage ? (
+                                <Image src={listing.user.profileImage} alt="Agent" fill className="object-cover"/>
+                            ) : (
+                                <div className="w-full h-full bg-blue-600 flex items-center justify-center text-[8px] md:text-[10px] font-bold text-white">
+                                    {listing.user.name?.substring(0,2).toUpperCase()}
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[8px] md:text-[10px] text-gray-400 uppercase tracking-widest font-bold leading-none mb-0.5 md:mb-1">Listed By</span>
+                            <span className="text-xs font-bold text-white leading-none group-hover:text-blue-400 transition-colors flex items-center gap-1">
+                                {listing.user.name} <CheckCircle size={10} className="text-blue-500"/>
+                            </span>
+                        </div>
+                    </Link>
                   </div>
+                  {/* ------------------------------------------- */}
               </div>
 
               <div className="flex items-center gap-3 w-full md:w-auto">
