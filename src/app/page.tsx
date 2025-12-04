@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server"; 
 import { Playfair_Display, Manrope } from 'next/font/google';
 import Navbar from "@/components/Navbar"; 
-import HeroSearch from "@/components/HeroSearch"; 
+import HeroSearch from "@/components/HeroSearch"; // <--- RESTORED IMPORT
 import CategoryIcons from "@/components/CategoryIcons"; 
 import ListingCarousel from "@/components/ListingCarousel"; 
 import NewsSection from "@/components/NewsSection"; 
@@ -34,7 +34,6 @@ async function getHomePageData() {
         take: 10 
     });
 
-    // "Premium" = Properties > 1M OR Vehicles > 200k
     const premiumListings = await prisma.listing.findMany({
         where: { 
             published: true,
@@ -66,9 +65,7 @@ export default async function Home() {
       
       <Navbar />
 
-      {/* 1. HERO SECTION (FIXED LAYOUT) */}
-      {/* Changed h-[650px] to min-h-[850px] to accommodate taller search boxes */}
-      {/* Changed justify-center to justify-start + pt-48 to lock title position */}
+      {/* 1. HERO SECTION */}
       <section className="relative min-h-[850px] w-full flex flex-col items-center justify-start pt-48 overflow-hidden">
         <div className="absolute inset-0 z-0">
            <div className="w-full h-full bg-[url('https://images.unsplash.com/photo-1600607686527-6fb886090705?q=80&w=2700&auto=format&fit=crop')] bg-cover bg-center grayscale opacity-30 scale-105 animate-[pulse_10s_ease-in-out_infinite]"></div>
@@ -83,6 +80,7 @@ export default async function Home() {
                The premier marketplace for luxury properties and high-performance vehicles in Malaysia.
            </p>
            
+           {/* RESTORED: Full Filter Widget */}
            <HeroSearch />
            
            <div className="mt-6 flex justify-center gap-4 text-xs font-bold text-gray-500 uppercase tracking-widest">
