@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, Suspense } from "react"; 
+import { useState, useEffect, Suspense } from "react"; 
 import { usePathname } from "next/navigation"; 
 import { Manrope, Playfair_Display } from 'next/font/google';
-import { Menu, X, ChevronDown, LayoutDashboard, Plus, Heart, Settings, Car, Home, Search, ArrowLeft } from "lucide-react"; 
+import { Menu, X, LayoutDashboard, Plus, Heart, Settings, Car, Home, Search, ArrowLeft } from "lucide-react"; 
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@clerk/nextjs";
 import SearchInput from "@/components/SearchInput"; 
 
@@ -13,12 +13,30 @@ const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', 
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
 
 export default function Navbar() {
-  const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false); // <--- NEW STATE
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false); // <--- Track scrolling
   const pathname = usePathname();
 
-  // Hide Global Navbar ONLY on Listing Pages
+  // Detect Scroll Position for Homepage Logic
+  useEffect(() => {
+    const handleScroll = () => {
+        // Show navbar search after scrolling down 400px (past the hero)
+        if (window.scrollY > 400) {
+            setIsScrolled(true);
+        } else {
+            setIsScrolled(false);
+        }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // LOGIC: Show Search if we are NOT on homepage, OR if we ARE on homepage but scrolled down
+  const showSearch = pathname !== '/' || isScrolled;
+
+  // Hide Global Navbar ONLY on Listing Pages (they have custom header)
   if (pathname?.startsWith('/listing/')) {
       return null;
   }
@@ -28,7 +46,7 @@ export default function Navbar() {
     <nav className={`fixed top-0 w-full z-50 bg-black/80 backdrop-blur-xl border-b border-white/10 transition-all ${sansFont.className}`}>
         <div className="max-w-[1920px] mx-auto px-6 h-20 flex items-center justify-between gap-4 relative">
             
-            {/* --- MOBILE SEARCH OVERLAY (Visible when Search Icon is clicked) --- */}
+            {/* --- MOBILE SEARCH OVERLAY --- */}
             {mobileSearchOpen ? (
                 <div className="absolute inset-0 bg-neutral-900 z-50 flex items-center px-4 animate-in fade-in slide-in-from-top-2">
                     <button 
@@ -60,13 +78,12 @@ export default function Navbar() {
                         </span>
                     </Link>
 
-                    {/* 2. MIDDLE: SEARCH BAR (Desktop Only) */}
-                    <div className="flex-1 max-w-2xl mx-auto hidden md:block">
-                        {pathname !== '/' && (
-                            <Suspense fallback={<div className="h-12 w-full bg-white/5 rounded-2xl animate-pulse"/>}>
-                                <SearchInput />
-                            </Suspense>
-                        )}
+                    {/* 2. MIDDLE: SEARCH BAR (Conditional Visibility) */}
+                    {/* Uses CSS transition for smooth fade in/out */}
+                    <div className={`flex-1 max-w-2xl mx-auto hidden md:block transition-opacity duration-500 ${showSearch ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}>
+                        <Suspense fallback={<div className="h-12 w-full bg-white/5 rounded-2xl animate-pulse"/>}>
+                            <SearchInput />
+                        </Suspense>
                     </div>
                     
                     {/* 3. RIGHT: ACTIONS */}
@@ -80,9 +97,8 @@ export default function Navbar() {
                             Vehicles
                         </Link>
 
-                        {/* --- NEW: MOBILE SEARCH ICON --- */}
-                        {/* Only show on mobile if NOT on homepage (since homepage has big hero search) */}
-                        {pathname !== '/' && (
+                        {/* Mobile Search Icon (Only shows if showSearch is true) */}
+                        {showSearch && (
                             <button 
                                 onClick={() => setMobileSearchOpen(true)}
                                 className="md:hidden flex items-center justify-center w-10 h-10 text-white/80 hover:text-white bg-white/5 rounded-full hover:bg-white/10 transition-all"
@@ -119,7 +135,6 @@ export default function Navbar() {
                             </button>
                             </Link>
 
-                            {/* SETTINGS LINK */}
                             <Link href="/settings" className="hidden md:flex items-center justify-center w-10 h-10 rounded-full text-gray-400 hover:text-white hover:bg-white/5 transition-all border border-transparent hover:border-white/10 mr-2" title="Settings">
                                 <Settings size={20} />
                             </Link>
@@ -147,8 +162,13 @@ export default function Navbar() {
         <div className="fixed inset-0 z-40 bg-[#0a0a0a] pt-24 px-6 animate-in slide-in-from-top-10 duration-200 md:hidden">
             <div className="flex flex-col gap-6 text-xl font-bold text-gray-300">
                 
-                {/* We removed the inline search bar here because we now have the top icon */}
-                
+                {/* Fallback Mobile Search (Always visible in menu for convenience) */}
+                <div className="mb-4">
+                    <Suspense fallback={<div className="h-10 bg-white/5 rounded-xl animate-pulse"/>}>
+                        <SearchInput />
+                    </Suspense>
+                </div>
+
                 <div className="space-y-4">
                     <p className="text-xs text-gray-500 uppercase tracking-widest font-bold border-b border-white/10 pb-2">Browse</p>
                     <Link href="/search?type=PROPERTY" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-4 hover:text-blue-500 transition-colors">
