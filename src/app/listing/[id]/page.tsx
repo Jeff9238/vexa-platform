@@ -6,12 +6,12 @@ import Image from "next/image";
 import { Playfair_Display, Manrope } from 'next/font/google';
 import { 
     MapPin, Calendar, CheckCircle2, Share2, 
-    BedDouble, Bath, Car, Gauge, Fuel, Move, PenLine
+    BedDouble, Bath, Car, Gauge, Fuel, Move, PenLine, ShieldCheck, Home
 } from "lucide-react";
 
 // Components
-import Navbar from "@/components/Navbar";
-import ImageGallery from "@/components/ImageGallery";
+import ListingHeroGallery from "@/components/ListingHeroGallery";
+import MobileStickyBar from "@/components/MobileStickyBar";
 import LocationMap from "@/components/LocationMap";
 import LoanCalculator from "@/components/LoanCalculator";
 import ContactButtons from "@/components/ContactButtons";
@@ -27,187 +27,200 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     
     if (!listing) notFound();
 
-    // Check if current user is the owner
     const user = await currentUser();
-    const userEmail = user?.emailAddresses[0]?.emailAddress;
-    const isOwner = userEmail === listing.user.email;
-
-    // Check favorite status
+    const isOwner = user?.emailAddresses[0]?.emailAddress === listing.user.email;
     const isLiked = await getFavoriteStatus(id);
 
-    // Parse Images
     const images = listing.images ? listing.images.split(',') : [];
-    const mainImage = images[0] || "/placeholder.jpg";
-
-    // Format Price
     const price = "RM " + listing.price.toLocaleString();
 
+    // Helper for WhatsApp
+    const agentPhone = listing.user.phoneNumber ? listing.user.phoneNumber.replace(/[^0-9]/g, '') : '';
+    const whatsappUrl = agentPhone ? `https://wa.me/${agentPhone}?text=Hi ${listing.user.name}, I'm interested in ${listing.title} (VEXA Ref: ${listing.id.substring(0,6)}).` : '#';
+
     return (
-        <div className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
+        <div className={`min-h-screen bg-[#050505] text-white ${sansFont.className} pb-32 md:pb-0`}>
             
-            {/* 1. CUSTOM HEADER (Transparent) */}
-            <header className="absolute top-0 w-full z-50 p-6 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+            {/* 1. TOP NAV */}
+            <nav className="absolute top-0 w-full z-30 p-4 md:p-6 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
                 <BackButton />
-                
                 <div className="flex gap-3 pointer-events-auto">
                     {isOwner && (
-                        <Link href={`/edit/${id}`} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-full font-bold shadow-lg transition-all">
-                            <PenLine size={16}/> Edit Listing
+                        <Link href={`/edit/${id}`} className="flex items-center gap-2 bg-blue-600/90 text-white px-4 py-2 rounded-full font-bold text-xs backdrop-blur-md hover:bg-blue-500">
+                            <PenLine size={14}/> Edit
                         </Link>
                     )}
-                    <div className="bg-black/40 backdrop-blur-md rounded-full border border-white/10 flex items-center p-1">
+                    <div className="bg-black/40 backdrop-blur-md rounded-full border border-white/10 flex items-center p-1.5 hover:bg-black/60 transition-colors">
                         <FavoriteButton listingId={listing.id} initialLiked={isLiked} />
                     </div>
                     <button className="w-10 h-10 bg-black/40 backdrop-blur-md rounded-full border border-white/10 flex items-center justify-center hover:bg-white hover:text-black transition-colors">
-                        <Share2 size={18}/>
+                        <Share2 size={16}/>
                     </button>
                 </div>
-            </header>
+            </nav>
 
-            {/* 2. HERO IMAGE */}
-            <div className="relative w-full h-[50vh] md:h-[65vh]">
-                <Image src={mainImage} alt={listing.title} fill className="object-cover" priority />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a] via-transparent to-black/30"></div>
-                
-                {/* Hero Content */}
-                <div className="absolute bottom-0 left-0 w-full p-6 md:p-12">
-                    <div className="max-w-7xl mx-auto">
-                        <div className="flex flex-col md:flex-row items-end justify-between gap-6">
-                            <div>
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    <span className="bg-blue-600 text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider">{listing.type}</span>
-                                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${listing.listingCategory === 'RENT' ? 'bg-purple-600' : 'bg-green-600'}`}>{listing.listingCategory || 'SALE'}</span>
-                                    {listing.condition && <span className="bg-white/20 backdrop-blur text-white px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider border border-white/10">{listing.condition}</span>}
-                                </div>
-                                <h1 className={`text-4xl md:text-6xl font-bold mb-2 leading-tight ${serifFont.className}`}>{listing.title}</h1>
-                                <p className="text-gray-300 flex items-center gap-2 text-lg">
-                                    <MapPin size={20} className="text-blue-500"/> {listing.location}
-                                </p>
-                            </div>
-                            <div className="text-right">
-                                <p className="text-sm text-gray-400 font-bold uppercase tracking-widest mb-1">Asking Price</p>
-                                <p className={`text-4xl md:text-5xl font-bold text-white ${serifFont.className}`}>{price}</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {/* 2. GALLERY */}
+            <div className="md:pt-28 md:px-6 md:max-w-[1600px] md:mx-auto">
+                <ListingHeroGallery images={images} />
             </div>
 
-            {/* 3. MAIN CONTENT GRID */}
-            <main className="max-w-7xl mx-auto px-6 py-12">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
+            {/* 3. MAIN CONTENT */}
+            <main className="max-w-[1600px] mx-auto px-6 py-8 md:py-12">
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
                     
-                    {/* LEFT COLUMN (Details) */}
-                    <div className="lg:col-span-2 space-y-12">
+                    {/* LEFT CONTENT (8 Cols) */}
+                    <div className="lg:col-span-8 space-y-10">
                         
-                        {/* Key Specs */}
-                        <div className="bg-neutral-900/50 border border-white/5 rounded-3xl p-8 grid grid-cols-2 md:grid-cols-4 gap-6">
-                            {listing.type === 'PROPERTY' ? (
-                                <>
-                                    <SpecItem icon={BedDouble} label="Bedrooms" value={listing.bedrooms} />
-                                    <SpecItem icon={Bath} label="Bathrooms" value={listing.bathrooms} />
-                                    <SpecItem icon={Move} label="Size" value={listing.sqft ? `${listing.sqft} sqft` : null} />
-                                    <SpecItem icon={Car} label="Car Parks" value={listing.carParks} />
-                                </>
-                            ) : (
-                                <>
-                                    <SpecItem icon={Calendar} label="Year" value={listing.year} />
-                                    <SpecItem icon={Gauge} label="Mileage" value={listing.mileage ? `${listing.mileage.toLocaleString()} km` : null} />
-                                    <SpecItem icon={Fuel} label="Fuel Type" value={listing.fuelType} />
-                                    <SpecItem icon={Car} label="Body" value={listing.bodyType} />
-                                </>
-                            )}
+                        {/* HEADER */}
+                        <div className="border-b border-white/10 pb-8">
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <span className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest">{listing.type}</span>
+                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${listing.listingCategory === 'RENT' ? 'bg-purple-600' : 'bg-emerald-600'}`}>
+                                    {listing.listingCategory || 'SALE'}
+                                </span>
+                                {listing.condition && <span className="border border-white/20 text-gray-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest">{listing.condition}</span>}
+                            </div>
+                            
+                            <h1 className={`text-3xl md:text-5xl font-bold text-white mb-3 leading-tight ${serifFont.className}`}>
+                                {listing.title}
+                            </h1>
+                            <div className="flex justify-between items-end">
+                                <p className="text-gray-400 flex items-center gap-2 text-sm md:text-base">
+                                    <MapPin size={16} className="text-blue-500"/> {listing.location}
+                                </p>
+                                <p className={`text-3xl md:text-4xl font-bold text-blue-400 ${serifFont.className}`}>
+                                    {price}
+                                </p>
+                            </div>
                         </div>
 
-                        {/* Description */}
-                        <div>
-                            <h3 className="text-2xl font-bold mb-6 font-serif">Description</h3>
-                            <div className="text-gray-300 leading-relaxed whitespace-pre-wrap text-lg">
+                        {/* ATTRIBUTES */}
+                        <section className="bg-white/5 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6 border-b border-white/10 pb-2">Property Attributes</h3>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-y-8 gap-x-4">
+                                 {listing.type === 'PROPERTY' ? (
+                                    <>
+                                        <AttributeBox label="Bedrooms" value={listing.bedrooms} icon={BedDouble} />
+                                        <AttributeBox label="Bathrooms" value={listing.bathrooms} icon={Bath} />
+                                        <AttributeBox label="Size" value={listing.sqft ? `${listing.sqft} sqft` : null} icon={Move} />
+                                        <AttributeBox label="Car Parks" value={listing.carParks} icon={Car} />
+                                        <AttributeBox label="Furnishing" value={listing.furnishing} icon={Home} />
+                                        <AttributeBox label="Type" value={listing.propertyType} icon={Home} />
+                                        <AttributeBox label="Tenure" value="Freehold" icon={ShieldCheck} /> 
+                                        <AttributeBox label="Title" value="Strata" icon={CheckCircle2} /> 
+                                    </>
+                                ) : (
+                                    <>
+                                        <AttributeBox label="Year" value={listing.year} icon={Calendar} />
+                                        <AttributeBox label="Mileage" value={listing.mileage ? `${listing.mileage} km` : null} icon={Gauge} />
+                                        <AttributeBox label="Fuel" value={listing.fuelType} icon={Fuel} />
+                                        <AttributeBox label="Body" value={listing.bodyType} icon={Car} />
+                                        <AttributeBox label="Engine" value={listing.engineCC ? `${listing.engineCC} cc` : null} icon={Gauge} />
+                                        <AttributeBox label="Power" value={listing.peakPower ? `${listing.peakPower} hp` : null} icon={Gauge} />
+                                    </>
+                                )}
+                            </div>
+                        </section>
+
+                        {/* DESCRIPTION */}
+                        <section>
+                            <h3 className={`text-2xl font-bold mb-4 ${serifFont.className}`}>Description</h3>
+                            <div className="prose prose-invert prose-lg max-w-none text-gray-400 leading-relaxed whitespace-pre-wrap">
                                 {listing.description}
                             </div>
-                        </div>
+                        </section>
 
-                        {/* Image Gallery */}
-                        <ImageGallery images={images} />
-
-                        {/* Facilities / Features */}
+                        {/* FACILITIES */}
                         {listing.facilities && (
-                            <div>
-                                <h3 className="text-2xl font-bold mb-6 font-serif">Features & Amenities</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            <section>
+                                <h3 className={`text-2xl font-bold mb-6 ${serifFont.className}`}>Facilities</h3>
+                                <div className="flex flex-wrap gap-3">
                                     {listing.facilities.split(',').map((fac, i) => (
-                                        <div key={i} className="flex items-center gap-3 text-gray-300 bg-neutral-900 border border-white/5 p-4 rounded-xl">
-                                            <CheckCircle2 size={18} className="text-green-500 flex-shrink-0"/>
-                                            <span className="text-sm font-bold">{fac}</span>
-                                        </div>
+                                        <span key={i} className="px-4 py-2 bg-neutral-900 border border-white/10 rounded-full text-sm text-gray-300 flex items-center gap-2">
+                                            <CheckCircle2 size={14} className="text-blue-500"/> {fac}
+                                        </span>
                                     ))}
                                 </div>
-                            </div>
+                            </section>
                         )}
 
-                        {/* Location Map */}
+                        {/* MAP */}
                         {listing.lat && listing.lng && (
-                            <div>
-                                <h3 className="text-2xl font-bold mb-6 font-serif">Location</h3>
-                                <div className="rounded-3xl overflow-hidden border border-white/10 shadow-2xl">
+                            <section>
+                                <h3 className={`text-2xl font-bold mb-6 text-white ${serifFont.className}`}>Location & Amenities</h3>
+                                <div className="h-auto w-full">
                                     <LocationMap lat={listing.lat} lng={listing.lng} />
                                 </div>
-                            </div>
+                            </section>
                         )}
                     </div>
 
-                    {/* RIGHT COLUMN (Agent & Tools) */}
-                    <div className="space-y-8">
-                        
-                        {/* Agent Card */}
-                        <div className="bg-white text-black rounded-3xl p-8 shadow-xl relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-10 -mt-10"></div>
+                    {/* RIGHT SIDEBAR (Desktop) */}
+                    <div className="hidden lg:block lg:col-span-4 relative">
+                        <div className="sticky top-28 space-y-6">
                             
-                            <div className="flex items-center gap-4 mb-6 relative z-10">
-                                <Link href={`/agent/${listing.userId}`} className="relative w-16 h-16 rounded-full overflow-hidden border-2 border-gray-200">
-                                    {listing.user.profileImage ? (
-                                        <Image src={listing.user.profileImage} alt={listing.user.name || "Agent"} fill className="object-cover"/>
-                                    ) : (
-                                        <div className="w-full h-full bg-blue-600 flex items-center justify-center text-white font-bold text-xl">
-                                            {listing.user.name?.substring(0,1) || "A"}
+                            {/* AGENT CARD */}
+                            <div className="bg-neutral-900/80 backdrop-blur border border-white/10 p-6 rounded-3xl shadow-xl relative overflow-hidden group">
+                                <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-600/10 blur-[80px] rounded-full group-hover:bg-blue-600/20 transition-all duration-1000"></div>
+                                <div className="relative z-10 flex flex-col items-center text-center">
+                                    <Link href={`/agent/${listing.userId}`} className="relative w-24 h-24 rounded-full p-1 border border-white/10 mb-4 group-hover:border-blue-500/50 transition-colors">
+                                        <div className="w-full h-full rounded-full overflow-hidden bg-black relative">
+                                            {listing.user.profileImage ? (
+                                                <Image src={listing.user.profileImage} alt="Agent" fill className="object-cover"/>
+                                            ) : (
+                                                <div className="w-full h-full bg-neutral-800 flex items-center justify-center text-white font-bold text-2xl">
+                                                    {listing.user.name?.substring(0,1) || "A"}
+                                                </div>
+                                            )}
                                         </div>
-                                    )}
-                                </Link>
-                                <div>
-                                    <p className="text-xs font-bold text-gray-500 uppercase tracking-widest">Listed By</p>
-                                    <Link href={`/agent/${listing.userId}`} className="text-xl font-bold hover:text-blue-600 transition-colors">
-                                        {listing.user.name}
+                                        <div className="absolute bottom-0 right-0 bg-blue-600 text-white p-1 rounded-full border-4 border-neutral-900">
+                                            <ShieldCheck size={14} />
+                                        </div>
                                     </Link>
+                                    <h4 className={`text-xl font-bold text-white mb-1 ${serifFont.className}`}>
+                                        {listing.user.name}
+                                    </h4>
+                                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-6">
+                                        VEXA Premier Agent
+                                    </p>
+                                    <div className="w-full">
+                                        <ContactButtons 
+                                            phone={listing.user.phoneNumber || ''} 
+                                            listingId={listing.id}
+                                            whatsappUrl={whatsappUrl}
+                                        />
+                                    </div>
                                 </div>
                             </div>
 
-                            <ContactButtons 
-                                phone={listing.user.phoneNumber || ''} 
-                                listingId={listing.id}
-                                whatsappUrl={`https://wa.me/${listing.user.phoneNumber?.replace(/[^0-9]/g, '')}?text=Hi, I am interested in ${listing.title}`}
-                            />
+                            <LoanCalculator price={listing.price} type={listing.type as any} />
                         </div>
-
-                        {/* Loan Calculator */}
-                        <LoanCalculator price={listing.price} type={listing.type as any} />
-
                     </div>
+
                 </div>
             </main>
+
+            {/* 4. MOBILE STICKY BAR */}
+            <MobileStickyBar 
+                phone={agentPhone} 
+                listingId={listing.id} 
+                whatsappUrl={whatsappUrl}
+                agentName={listing.user.name || "Agent"}
+                agentImage={listing.user.profileImage}
+            />
 
         </div>
     );
 }
 
-// Sub-component for Specs
-function SpecItem({ icon: Icon, label, value }: { icon: any, label: string, value: any }) {
+function AttributeBox({ label, value, icon: Icon }: { label: string, value: any, icon: any }) {
     if (!value) return null;
     return (
         <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 text-gray-500 text-xs font-bold uppercase tracking-wider">
-                <Icon size={14}/> {label}
-            </div>
-            <p className="text-xl font-bold text-white">{value}</p>
+            <span className="flex items-center gap-2 text-gray-500 text-[10px] font-bold uppercase tracking-wider">
+                <Icon size={12} className="text-blue-500"/> {label}
+            </span>
+            <span className="text-lg font-bold text-white">{value}</span>
         </div>
     );
 }

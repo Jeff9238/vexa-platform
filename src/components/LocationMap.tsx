@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { GoogleMap, Marker, useJsApiLoader, InfoWindow } from '@react-google-maps/api';
-import { ShoppingBag, Utensils, Coffee, School, Loader2, MapPin, ExternalLink } from 'lucide-react';
+import { ShoppingBag, Utensils, Coffee, School, Loader2, MapPin, ExternalLink, Trees, Dumbbell } from 'lucide-react';
 
 const containerStyle = {
   width: '100%',
-  height: '400px',
+  height: '100%',
   borderRadius: '1rem'
 };
 
@@ -39,21 +39,20 @@ export default function LocationMap({ lat, lng }: { lat: number, lng: number }) 
         const mapDiv = document.createElement('div');
         const service = new google.maps.places.PlacesService(mapDiv);
         
+        // Added 'park' and 'gym' to request
         const request = {
           location: center,
-          radius: 2000, // 2km radius
-          type: 'point_of_interest'
+          radius: 1500, // 1.5km
+          type: 'point_of_interest' // General fallback, we filter below
         };
 
         service.nearbySearch(request, (results, status) => {
           if (status === google.maps.places.PlacesServiceStatus.OK && results) {
-            const relevant = results.filter(p => 
-                p.types?.includes('shopping_mall') || 
-                p.types?.includes('restaurant') || 
-                p.types?.includes('cafe') ||
-                p.types?.includes('school') ||
-                p.types?.includes('hospital')
-            ).slice(0, 6); 
+            // Priority Filter
+            const priorityTypes = ['shopping_mall', 'restaurant', 'cafe', 'school', 'park', 'gym', 'hospital'];
+            const relevant = results
+                .filter(p => p.types?.some(t => priorityTypes.includes(t)))
+                .slice(0, 5); 
             setPlaces(relevant);
           }
         });
@@ -62,85 +61,73 @@ export default function LocationMap({ lat, lng }: { lat: number, lng: number }) 
     }
   }, [isLoaded, lat, lng]);
 
-  if (!isLoaded) return <div className="h-[400px] bg-neutral-900 rounded-2xl flex items-center justify-center text-gray-500"><Loader2 className="animate-spin mr-2"/> Loading Location...</div>;
+  if (!isLoaded) return <div className="h-full bg-neutral-900 rounded-2xl flex items-center justify-center text-gray-500"><Loader2 className="animate-spin mr-2"/> Loading Map...</div>;
 
   return (
-    <div className="space-y-6">
-        {/* MAP */}
-        <GoogleMap
-            mapContainerStyle={containerStyle}
-            center={center}
-            zoom={14}
-            options={{ styles: DARK_MAP_STYLE, disableDefaultUI: true, streetViewControl: false }}
-        >
-            {/* Main Listing Pin (Red) */}
-            <Marker position={center} />
-
-            {/* Nearby Places Pins (Small Blue) */}
-            {places.map((place) => (
-                <Marker 
-                    key={place.place_id}
-                    position={place.geometry.location}
-                    icon={{
-                        path: window.google.maps.SymbolPath.CIRCLE,
-                        scale: 5,
-                        fillColor: "#3b82f6", // Blue
-                        fillOpacity: 1,
-                        strokeColor: "#ffffff",
-                        strokeWeight: 1,
-                    }}
-                    onClick={() => setSelectedPlace(place)}
-                />
-            ))}
-
-            {/* Popup when clicking a small pin */}
-            {selectedPlace && (
-                <InfoWindow
-                    position={selectedPlace.geometry.location}
-                    onCloseClick={() => setSelectedPlace(null)}
-                >
-                    <div className="text-black p-1">
-                        <h4 className="font-bold text-sm">{selectedPlace.name}</h4>
-                        <p className="text-xs">{selectedPlace.vicinity}</p>
-                    </div>
-                </InfoWindow>
-            )}
-        </GoogleMap>
-
-        {/* INTERACTIVE LIST */}
-        <div>
-            <h4 className="text-sm font-bold text-gray-500 uppercase mb-4 tracking-widest flex justify-between items-center">
-                <span>What's Nearby (2km)</span>
-                <span className="text-[10px] bg-blue-900/50 text-blue-400 px-2 py-1 rounded">Click for Directions</span>
-            </h4>
-            <div className="grid gap-3">
+    <div className="flex flex-col h-full gap-6">
+        {/* MAP CONTAINER */}
+        <div className="h-[350px] w-full rounded-2xl overflow-hidden shadow-2xl border border-white/10 relative">
+            <GoogleMap
+                mapContainerStyle={containerStyle}
+                center={center}
+                zoom={15}
+                options={{ styles: DARK_MAP_STYLE, disableDefaultUI: true }}
+            >
+                <Marker position={center} />
                 {places.map((place) => (
-                    <a 
+                    <Marker 
                         key={place.place_id}
-                        href={`https://www.google.com/maps/place/?q=place_id:${place.place_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="flex items-center justify-between bg-neutral-900 p-3 rounded-xl border border-white/5 hover:border-blue-500/50 hover:bg-white/5 transition-all cursor-pointer group"
-                    >
+                        position={place.geometry.location}
+                        icon={{
+                            path: window.google.maps.SymbolPath.CIRCLE,
+                            scale: 6,
+                            fillColor: "#3b82f6",
+                            fillOpacity: 1,
+                            strokeColor: "#ffffff",
+                            strokeWeight: 2,
+                        }}
+                        onClick={() => setSelectedPlace(place)}
+                    />
+                ))}
+                {selectedPlace && (
+                    <InfoWindow position={selectedPlace.geometry.location} onCloseClick={() => setSelectedPlace(null)}>
+                        <div className="text-black p-1 max-w-[150px]">
+                            <h4 className="font-bold text-xs">{selectedPlace.name}</h4>
+                            <p className="text-[10px] line-clamp-2">{selectedPlace.vicinity}</p>
+                        </div>
+                    </InfoWindow>
+                )}
+            </GoogleMap>
+        </div>
+
+        {/* NEARBY LIST */}
+        <div className="bg-white/5 border border-white/5 rounded-2xl p-5">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <MapPin size={12}/> What's Nearby (1.5km)
+            </h4>
+            <div className="space-y-3">
+                {places.map((place) => (
+                    <div key={place.place_id} className="flex items-center justify-between group cursor-default">
                         <div className="flex items-center gap-3 overflow-hidden">
-                            <div className="p-2 bg-blue-900/30 rounded-lg text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-colors">
-                                {place.types?.includes('restaurant') ? <Utensils size={16}/> : 
-                                 place.types?.includes('cafe') ? <Coffee size={16}/> :
-                                 place.types?.includes('school') ? <School size={16}/> : 
-                                 <ShoppingBag size={16}/>}
+                            <div className="p-2 bg-neutral-800 rounded-lg text-blue-400 border border-white/5">
+                                {place.types?.includes('park') ? <Trees size={14}/> :
+                                 place.types?.includes('restaurant') ? <Utensils size={14}/> : 
+                                 place.types?.includes('cafe') ? <Coffee size={14}/> :
+                                 place.types?.includes('school') ? <School size={14}/> : 
+                                 place.types?.includes('gym') ? <Dumbbell size={14}/> :
+                                 <ShoppingBag size={14}/>}
                             </div>
                             <div className="min-w-0">
-                                <p className="text-sm font-bold text-white truncate group-hover:text-blue-400 transition-colors">{place.name}</p>
-                                <p className="text-xs text-gray-500 truncate">{place.vicinity}</p>
+                                <p className="text-sm font-bold text-white truncate">{place.name}</p>
+                                <p className="text-[10px] text-gray-500 truncate">{place.vicinity}</p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                             {place.rating && <span className="text-xs font-bold text-green-400 whitespace-nowrap">{place.rating} ★</span>}
-                             <ExternalLink size={14} className="text-gray-600 group-hover:text-white"/>
-                        </div>
-                    </a>
+                        <span className="text-[10px] font-bold text-green-500 bg-green-900/20 px-2 py-1 rounded border border-green-900/50">
+                            {place.rating ? place.rating + " ★" : "Nearby"}
+                        </span>
+                    </div>
                 ))}
-                {places.length === 0 && <p className="text-gray-500 text-sm italic">Searching nearby spots...</p>}
+                {places.length === 0 && <p className="text-gray-600 text-xs italic">Searching for amenities...</p>}
             </div>
         </div>
     </div>
