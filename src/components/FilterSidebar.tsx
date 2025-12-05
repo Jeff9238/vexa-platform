@@ -1,9 +1,9 @@
 'use client'
 
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, MapPin, Car, Check, SlidersHorizontal, X, Home, ArrowUpDown, Tag, DollarSign } from 'lucide-react';
+import { Search, MapPin, Car, SlidersHorizontal, X, Home, ArrowUpDown } from 'lucide-react';
 
 const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
 
@@ -19,57 +19,85 @@ const ALL_BRANDS = ["Perodua", "Proton", "Honda", "Toyota", "BMW", "Mercedes-Ben
 const useFilters = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
     
     const [filters, setFilters] = useState({
-        // FIX: Default to '' (ALL) to prevent forcing "VEHICLE" mode on empty search
         type: searchParams.get('type') || '', 
         q: searchParams.get('q') || '',
         minPrice: searchParams.get('minPrice') || '',
         maxPrice: searchParams.get('maxPrice') || '',
         state: searchParams.get('state') || '',
         brand: searchParams.get('brand') || '',
-        year: searchParams.get('year') || '',
-        bodyType: searchParams.get('bodyType') || '',
-        bedrooms: searchParams.get('bedrooms') || '',
-        propertyType: searchParams.get('propertyType') || '',
         listingCategory: searchParams.get('listingCategory') || '',
         sort: searchParams.get('sort') || 'newest',
     });
 
-    // Sync state with URL params
+    // 1. Sync State with URL (on Back/Forward or Nav)
     useEffect(() => {
         setFilters(prev => ({
             ...prev,
+            type: searchParams.get('type') || '',
             q: searchParams.get('q') || '',
-            type: searchParams.get('type') || '', // Ensures we stay in sync with URL
+            listingCategory: searchParams.get('listingCategory') || '',
+            state: searchParams.get('state') || '',
+            brand: searchParams.get('brand') || '',
             sort: searchParams.get('sort') || 'newest',
-            listingCategory: searchParams.get('listingCategory') || ''
         }));
     }, [searchParams]);
 
-    // Debounce URL updates
-    useEffect(() => {
-        const timeoutId = setTimeout(() => {
-            const params = new URLSearchParams();
-            Object.entries(filters).forEach(([key, value]) => {
-                if (value) params.set(key, value);
-            });
-            const currentString = searchParams.toString();
-            const newString = params.toString();
-            if (currentString !== newString) router.push(`/search?${newString}`);
-        }, 500);
-        return () => clearTimeout(timeoutId);
-    }, [filters, router, searchParams]);
+    // Helper to push URL
+    const pushToUrl = (currentFilters: typeof filters) => {
+        const params = new URLSearchParams();
+        Object.entries(currentFilters).forEach(([key, value]) => {
+            if (value) params.set(key, value);
+        });
+        router.push(`/search?${params.toString()}`);
+    };
 
-    const handleChange = (e: any) => setFilters({ ...filters, [e.target.name]: e.target.value });
-    const selectBrand = (brandName: string) => setFilters({ ...filters, brand: filters.brand === brandName ? '' : brandName });
-    const updateFilter = (updates: Partial<typeof filters>) => setFilters({ ...filters, ...updates });
+    // 2. Handle Text Inputs (Debounced)
+    const handleChange = (e: any) => {
+        const { name, value } = e.target;
+        
+        // Update local UI immediately
+        setFilters(prev => ({ ...prev, [name]: value }));
+
+        // Clear existing timer
+        if (timerRef.current) clearTimeout(timerRef.current);
+        
+        // Set new timer
+        timerRef.current = setTimeout(() => {
+            // We use the functional updater here purely to access the LATEST state
+            // safely inside the closure, without adding 'filters' as a dependency.
+            setFilters(latest => {
+                pushToUrl(latest);
+                return latest;
+            });
+        }, 500);
+    };
+
+    // 3. Handle Buttons/Selects (Immediate)
+    const updateFilter = (updates: Partial<typeof filters>) => {
+        // Calculate new state immediately using current scope 'filters'
+        const next = { ...filters, ...updates };
+        
+        // Update UI state
+        setFilters(next);
+        
+        // Trigger Navigation immediately (Outside of the state setter!)
+        pushToUrl(next);
+    };
+
+    // 4. Special handler for Brands to allow toggling
+    const selectBrand = (brandName: string) => {
+        const newValue = filters.brand === brandName ? '' : brandName;
+        updateFilter({ brand: newValue });
+    };
+    
     const reset = () => router.push('/search');
 
     return { filters, handleChange, selectBrand, updateFilter, reset };
 };
 
-// The Form Content
 const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }: any) => (
     <div className="space-y-6">
         
@@ -80,9 +108,8 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
             </label>
             <div className="relative group">
                 <select 
-                    name="sort" 
                     value={filters.sort} 
-                    onChange={handleChange} 
+                    onChange={(e) => updateFilter({ sort: e.target.value })} 
                     className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500/50 transition-colors cursor-pointer appearance-none"
                 >
                     <option value="newest" className="bg-neutral-900">Newest Listed</option>
@@ -96,11 +123,11 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
             </div>
         </div>
         
-        {/* Asset Type - Segmented Control */}
+        {/* Asset Type */}
         <div>
             <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">Asset Type</label>
             <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5">
-                <button onClick={() => updateFilter({ type: '', brand: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${filters.type === '' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+                <button onClick={() => updateFilter({ type: '', brand: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${!filters.type ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
                     <span>ALL</span>
                 </button>
                 <button onClick={() => updateFilter({ type: 'PROPERTY', brand: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${filters.type === 'PROPERTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
@@ -112,12 +139,12 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
             </div>
         </div>
 
-        {/* Listing Category (Sale vs Rent) - Hidden for Vehicles */}
+        {/* Listing Category (Sale vs Rent) */}
         {filters.type !== 'VEHICLE' && (
             <div>
                 <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">Listing Category</label>
                 <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5">
-                    <button onClick={() => updateFilter({ listingCategory: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${filters.listingCategory === '' ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
+                    <button onClick={() => updateFilter({ listingCategory: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${!filters.listingCategory ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
                         Any
                     </button>
                     <button onClick={() => updateFilter({ listingCategory: 'SALE' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${filters.listingCategory === 'SALE' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
@@ -143,7 +170,7 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
                 <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Location</label>
                 <div className="flex items-center bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus-within:border-blue-500/50 focus-within:bg-black/40 transition-all relative">
                     <MapPin size={14} className="text-gray-500 mr-2.5"/>
-                    <select name="state" value={filters.state} onChange={handleChange} className="w-full bg-transparent text-xs text-white outline-none cursor-pointer appearance-none relative z-10">
+                    <select name="state" value={filters.state} onChange={(e) => updateFilter({ state: e.target.value })} className="w-full bg-transparent text-xs text-white outline-none cursor-pointer appearance-none relative z-10">
                         <option value="" className="bg-neutral-900 text-gray-500">All Malaysia</option>
                         {MALAYSIA_STATES.map(s => <option key={s} value={s} className="bg-neutral-900">{s}</option>)}
                     </select>
@@ -166,7 +193,7 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
                     ))}
                 </div>
                 <div className="relative">
-                    <select name="brand" value={filters.brand} onChange={handleChange} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-400 outline-none focus:border-blue-500/50 transition-colors appearance-none cursor-pointer">
+                    <select name="brand" value={filters.brand} onChange={(e) => updateFilter({ brand: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-400 outline-none focus:border-blue-500/50 transition-colors appearance-none cursor-pointer">
                         <option value="" className="bg-neutral-900">Other Brands...</option>
                         {ALL_BRANDS.map(b => <option key={b} value={b} className="bg-neutral-900">{b}</option>)}
                     </select>
@@ -197,14 +224,12 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
     </div>
 );
 
-// Helper Icon
 const ChevronDownIcon = () => (
     <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
 );
 
-// 1. DESKTOP SIDEBAR
 export default function FilterSidebar() {
   const logic = useFilters();
   return (
@@ -218,7 +243,6 @@ export default function FilterSidebar() {
   );
 }
 
-// 2. MOBILE TRIGGER BUTTON + MODAL
 export function FilterMobileTrigger() {
     const [isOpen, setIsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -235,21 +259,23 @@ export function FilterMobileTrigger() {
                 <SlidersHorizontal size={12} className="text-blue-400"/> Filter
             </button>
 
-            {/* React Portal for Mobile Modal */}
             {isOpen && mounted && createPortal(
                 <div className="fixed inset-0 z-[9999] flex justify-end">
                     <div 
                         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
                         onClick={() => setIsOpen(false)}
                     />
+                    
                     <div className="relative w-full max-w-[320px] bg-[#121212] h-full p-6 overflow-y-auto border-l border-white/10 shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
                         <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#121212] z-10 py-2 border-b border-white/5">
                             <h2 className="text-lg font-bold text-white flex items-center gap-2"><SlidersHorizontal size={18} className="text-blue-500"/> Filters</h2>
                             <button onClick={() => setIsOpen(false)} className="p-2 bg-white/5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><X size={18}/></button>
                         </div>
+
                         <div className="flex-grow pb-24">
                             <FilterForm {...logic} />
                         </div>
+
                         <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-[#121212] to-transparent">
                             <button onClick={() => setIsOpen(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all text-sm">
                                 View Results
