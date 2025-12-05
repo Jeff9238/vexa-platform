@@ -9,12 +9,29 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+// Enums for Strict Typing
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  HIDDEN
+}
+
+enum ListingType {
+  PROPERTY
+  VEHICLE
+}
+
 // 2. USER
 model User {
   id           String   @id @default(uuid())
   email        String   @unique
   name         String?
-  role         String   @default("USER") // "USER" or "ADMIN"
+  role         UserRole @default(USER)
   credits      Int      @default(0)
   
   // --- PROFILE FIELDS ---
@@ -33,40 +50,40 @@ model Favorite {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
   
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId    String
   
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   listingId String
 
-  @@unique([userId, listingId])
+  @@unique([userId, listingId]) // Prevent duplicate favorites
+  @@index([userId]) // Faster lookup for "My Favorites" page
 }
 
 // 4. LISTING
 model Listing {
-  id          String   @id @default(uuid())
-  title       String
-  description String
-  price       Float
-  type        String   
-  tags        String
-  images      String
-  location    String   @default("Malaysia")
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  price        Float
+  type         String   // Keeping String for flexibility, but mapped to logic
+  tags         String
+  images       String
+  location     String   @default("Malaysia")
   
   // Location Split
-  area        String   @default("City")
-  state       String   @default("Malaysia")
+  area         String   @default("City")
+  state        String   @default("Malaysia")
   locationName String?
-  lat         Float?
-  lng         Float?
+  lat          Float?
+  lng          Float?
   
-  // Status - MAKE SURE THIS IS LOWERCASE 's'
-  status      String   @default("ACTIVE") 
+  status       ListingStatus @default(ACTIVE) 
   
-  condition   String?
-  verified    Boolean  @default(false)
-  published   Boolean  @default(true)
-  createdAt   DateTime @default(now())
+  condition    String?
+  verified     Boolean  @default(false)
+  published    Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
   // Analytics
   views           Int      @default(0)
@@ -74,44 +91,54 @@ model Listing {
   callClicks      Int      @default(0)
   
   // Property Fields
-  bedrooms    Int?
-  bathrooms   Int?
-  sqft        Int?
-  carParks    Int?
-  propertyType String?
-  furnishing  String?
-  listingCategory String?
-  facilities      String?
+  bedrooms      Int?
+  bathrooms     Int?
+  sqft          Int?
+  carParks      Int?
+  propertyType  String?
+  furnishing    String?
+  listingCategory String? // SALE or RENT
+  facilities    String?
 
   // Vehicle Fields
-  brand       String?
-  model       String?
-  year        Int?
-  variant     String?
-  series      String?
-  color       String?
-  mileage     Int?
-  transmission String?
-  fuelType    String?
-  bodyType    String?
-  seats       Int?
-  origin      String?
-  engineCC    Int?
-  peakPower   Int?
-  peakTorque  Int?
+  brand         String?
+  model         String?
+  year          Int?
+  variant       String?
+  series        String?
+  color         String?
+  mileage       Int?
+  transmission  String?
+  fuelType      String?
+  bodyType      String?
+  seats         Int?
+  origin        String?
+  engineCC      Int?
+  peakPower     Int?
+  peakTorque    Int?
 
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
-  favorites   Favorite[]
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  favorites     Favorite[]
+
+  // --- PERFORMANCE INDEXES ---
+  // Vital for search page speed
+  @@index([type, status, published]) 
+  @@index([price])
+  @@index([state])
+  @@index([brand])
+  @@index([createdAt])
 }
 
 // 5. NEWS ARTICLE
 model NewsArticle {
-  id          String   @id @default(uuid())
-  title       String
-  summary     String
-  content     String   // Full article (HTML or Markdown)
-  category    String   // "Property" or "Vehicle"
-  imageUrl    String
-  createdAt   DateTime @default(now())
+  id        String   @id @default(uuid())
+  title     String
+  summary   String
+  content   String   // Full article (HTML or Markdown)
+  category  String   // "Property" or "Vehicle"
+  imageUrl  String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt]) // Fast sorting for news feed
 }
