@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Filter, MapPin, Car, Check, SlidersHorizontal, X, Home, ArrowUpDown, Tag } from 'lucide-react';
+import { Search, MapPin, Car, Check, SlidersHorizontal, X, Home, ArrowUpDown, Tag, DollarSign } from 'lucide-react';
 
 const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
 
@@ -21,7 +21,8 @@ const useFilters = () => {
     const searchParams = useSearchParams();
     
     const [filters, setFilters] = useState({
-        type: searchParams.get('type') || (searchParams.get('q') ? '' : 'VEHICLE'),
+        // FIX: Default to '' (ALL) to prevent forcing "VEHICLE" mode on empty search
+        type: searchParams.get('type') || '', 
         q: searchParams.get('q') || '',
         minPrice: searchParams.get('minPrice') || '',
         maxPrice: searchParams.get('maxPrice') || '',
@@ -35,16 +36,18 @@ const useFilters = () => {
         sort: searchParams.get('sort') || 'newest',
     });
 
+    // Sync state with URL params
     useEffect(() => {
         setFilters(prev => ({
             ...prev,
             q: searchParams.get('q') || '',
-            type: searchParams.get('type') || (searchParams.get('q') ? '' : 'VEHICLE'),
+            type: searchParams.get('type') || '', // Ensures we stay in sync with URL
             sort: searchParams.get('sort') || 'newest',
             listingCategory: searchParams.get('listingCategory') || ''
         }));
     }, [searchParams]);
 
+    // Debounce URL updates
     useEffect(() => {
         const timeoutId = setTimeout(() => {
             const params = new URLSearchParams();
@@ -60,16 +63,13 @@ const useFilters = () => {
 
     const handleChange = (e: any) => setFilters({ ...filters, [e.target.name]: e.target.value });
     const selectBrand = (brandName: string) => setFilters({ ...filters, brand: filters.brand === brandName ? '' : brandName });
-    
-    // FIX: Use a single update function that accepts multiple fields to prevent batching issues
     const updateFilter = (updates: Partial<typeof filters>) => setFilters({ ...filters, ...updates });
-    
     const reset = () => router.push('/search');
 
     return { filters, handleChange, selectBrand, updateFilter, reset };
 };
 
-// The Form Content (Refined for "High Class" & Compact Look)
+// The Form Content
 const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }: any) => (
     <div className="space-y-6">
         
@@ -112,7 +112,7 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
             </div>
         </div>
 
-        {/* Listing Category (Sale vs Rent) - ONLY FOR PROPERTY or ALL */}
+        {/* Listing Category (Sale vs Rent) - Hidden for Vehicles */}
         {filters.type !== 'VEHICLE' && (
             <div>
                 <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">Listing Category</label>
@@ -238,25 +238,18 @@ export function FilterMobileTrigger() {
             {/* React Portal for Mobile Modal */}
             {isOpen && mounted && createPortal(
                 <div className="fixed inset-0 z-[9999] flex justify-end">
-                    {/* Backdrop */}
                     <div 
                         className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
                         onClick={() => setIsOpen(false)}
                     />
-                    
-                    {/* Drawer Panel */}
                     <div className="relative w-full max-w-[320px] bg-[#121212] h-full p-6 overflow-y-auto border-l border-white/10 shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
-                        
                         <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#121212] z-10 py-2 border-b border-white/5">
                             <h2 className="text-lg font-bold text-white flex items-center gap-2"><SlidersHorizontal size={18} className="text-blue-500"/> Filters</h2>
                             <button onClick={() => setIsOpen(false)} className="p-2 bg-white/5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><X size={18}/></button>
                         </div>
-
                         <div className="flex-grow pb-24">
                             <FilterForm {...logic} />
                         </div>
-
-                        {/* Sticky Bottom Button */}
                         <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-[#121212] to-transparent">
                             <button onClick={() => setIsOpen(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all text-sm">
                                 View Results
