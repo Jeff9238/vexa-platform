@@ -1,8 +1,10 @@
 'use client'
 
-import { MessageCircle, Phone, ShieldCheck } from "lucide-react";
+import { MessageCircle, Phone, ShieldCheck, MessageSquareText, Loader2 } from "lucide-react";
 import Image from "next/image";
-import { trackContact } from "@/app/actions";
+import { trackContact, startChat } from "@/app/actions";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 interface MobileBarProps {
     phone: string;
@@ -10,15 +12,31 @@ interface MobileBarProps {
     whatsappUrl: string;
     agentName: string;
     agentImage: string | null;
+    isOwner?: boolean;
 }
 
-export default function MobileStickyBar({ phone, listingId, whatsappUrl, agentName, agentImage }: MobileBarProps) {
+export default function MobileStickyBar({ phone, listingId, whatsappUrl, agentName, agentImage, isOwner }: MobileBarProps) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  const handleChat = async () => {
+      setLoading(true);
+      try {
+          const res = await startChat(listingId);
+          if (res?.chatId) router.push(`/chat/${res.chatId}`);
+      } catch {
+          router.push('/sign-in');
+      } finally {
+          setLoading(false);
+      }
+  };
+
   return (
     <div className="fixed bottom-0 inset-x-0 z-50 bg-[#0a0a0a]/95 backdrop-blur-xl border-t border-white/10 p-3 pb-6 md:hidden shadow-[0_-10px_40px_rgba(0,0,0,0.5)] safe-area-bottom">
         <div className="flex items-center justify-between gap-3">
             
             {/* AGENT INFO (Left) */}
-            <div className="flex items-center gap-3 flex-shrink-0 max-w-[40%]">
+            <div className="flex items-center gap-3 flex-shrink-0 max-w-[35%]">
                 <div className="relative w-10 h-10 rounded-full overflow-hidden border border-white/20">
                     {agentImage ? (
                         <Image src={agentImage} alt="Agent" fill className="object-cover"/>
@@ -35,12 +53,22 @@ export default function MobileStickyBar({ phone, listingId, whatsappUrl, agentNa
 
             {/* ACTIONS (Right) */}
             <div className="flex gap-2 flex-grow justify-end">
+                {!isOwner && (
+                    <button 
+                        onClick={handleChat}
+                        disabled={loading}
+                        className="w-10 h-10 bg-blue-600 text-white rounded-lg flex items-center justify-center shadow-lg transition-all active:scale-95"
+                    >
+                        {loading ? <Loader2 size={18} className="animate-spin"/> : <MessageSquareText size={18}/>}
+                    </button>
+                )}
+
                 <a 
                     href={whatsappUrl} 
                     target="_blank" 
                     rel="noopener noreferrer" 
                     onClick={() => trackContact(listingId, 'WHATSAPP')}
-                    className="flex-1 max-w-[120px] flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebc50] text-white py-2.5 rounded-lg font-bold text-xs shadow-lg transition-all active:scale-95"
+                    className="flex-1 flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebc50] text-white py-2.5 rounded-lg font-bold text-xs shadow-lg transition-all active:scale-95"
                 >
                     <MessageCircle size={16}/> WhatsApp
                 </a>

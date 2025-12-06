@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import Image from "next/image";
 import Link from "next/link";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { ArrowLeft, Trash2, Wallet, Plus, Pencil, MapPin, Eye, MessageCircle, Phone, TrendingUp, Car, Home, CheckCircle2, CircleDashed } from "lucide-react";
+import { ArrowLeft, Trash2, Wallet, Plus, Pencil, MapPin, Eye, MessageCircle, Phone, TrendingUp, Car, Home, CheckCircle2, CircleDashed, MessageSquare } from "lucide-react";
 import { deleteListing, toggleListingStatus } from "../actions";
 import { currentUser } from "@clerk/nextjs/server"; 
 import { redirect } from "next/navigation";
@@ -90,6 +90,20 @@ export default async function Dashboard() {
                         <div className="text-2xl font-bold text-white">{totalLeads}</div>
                         <div className="text-xs text-gray-500">Total Leads</div>
                     </div>
+
+                    {/* NEW: Messages Card (Spans 2 columns) */}
+                    <Link href="/chat" className="col-span-2 p-4 bg-black hover:bg-neutral-800 transition-colors rounded-2xl border border-white/5 flex items-center justify-between group">
+                        <div className="flex items-center gap-4">
+                            <div className="p-2 bg-neutral-800 rounded-lg text-white group-hover:bg-blue-600 transition-colors">
+                                <MessageSquare size={20}/>
+                            </div>
+                            <div>
+                                <div className="font-bold text-white group-hover:text-blue-400">My Inbox</div>
+                                <div className="text-xs text-gray-500">View recent chats</div>
+                            </div>
+                        </div>
+                        <ArrowLeft size={16} className="rotate-180 text-gray-600 group-hover:text-white transition-colors"/>
+                    </Link>
                 </div>
             </div>
         </div>

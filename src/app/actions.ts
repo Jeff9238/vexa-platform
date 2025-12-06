@@ -9,11 +9,6 @@ import { ListingStatus, UserRole, Prisma } from "@prisma/client";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-// ... (Keep existing getAuthenticatedUser, analyzeImage, createListing, updateListing, toggleListingStatus, deleteListing, getListing, toggleFavorite, getFavoriteStatus, updateProfile, getUserProfile, trackContact, getListingTips functions EXACTLY as they are) ...
-
-// --- RE-PASTE EVERYTHING ABOVE THIS LINE FROM YOUR ORIGINAL FILE IF NEEDED ---
-// --- OR COPY-PASTE THE ENTIRE FILE BELOW IF YOU WANT A COMPLETE REPLACE ---
-
 // --- AUTH HELPER ---
 async function getAuthenticatedUser() {
   const clerkUser = await currentUser();
@@ -37,6 +32,7 @@ async function getAuthenticatedUser() {
   return dbUser;
 }
 
+// --- AI: ANALYZE IMAGE ---
 export async function analyzeImage(imageBase64: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
@@ -48,14 +44,17 @@ export async function analyzeImage(imageBase64: string) {
     ]);
 
     const text = result.response.text();
+    // CLEANUP: Remove markdown code blocks if present
     const cleanJson = text.replace(/```json|```/g, '').trim();
     return JSON.parse(cleanJson);
+
   } catch (error) {
     console.error("Gemini AI Failed:", error);
     return null;
   }
 }
 
+// --- LISTING: CREATE ---
 export async function createListing(formData: FormData) {
   const user = await getAuthenticatedUser();
   if (user.credits < 5) throw new Error("Insufficient Credits!");
@@ -82,6 +81,7 @@ export async function createListing(formData: FormData) {
   return { success: true };
 }
 
+// --- LISTING: UPDATE ---
 export async function updateListing(formData: FormData) {
   const id = formData.get('id') as string;
   const user = await getAuthenticatedUser();
@@ -91,13 +91,17 @@ export async function updateListing(formData: FormData) {
 
   const data = parseListingFormData(formData);
 
-  await prisma.listing.update({ where: { id }, data: data });
+  await prisma.listing.update({ 
+      where: { id }, 
+      data: data 
+  });
   
   revalidatePath(`/listing/${id}`);
   revalidatePath('/dashboard');
   return { success: true };
 }
 
+// --- LISTING: TOGGLE STATUS ---
 export async function toggleListingStatus(id: string, newStatus: string) {
   const user = await getAuthenticatedUser();
   const listing = await prisma.listing.findUnique({ where: { id } });
@@ -106,12 +110,16 @@ export async function toggleListingStatus(id: string, newStatus: string) {
 
   const statusEnum = newStatus === 'SOLD' ? ListingStatus.SOLD : ListingStatus.ACTIVE;
 
-  await prisma.listing.update({ where: { id }, data: { status: statusEnum } });
+  await prisma.listing.update({
+    where: { id },
+    data: { status: statusEnum }
+  });
 
   revalidatePath('/dashboard');
   return { success: true };
 }
 
+// --- LISTING: DELETE ---
 export async function deleteListing(id: string) {
   const user = await getAuthenticatedUser();
   const listing = await prisma.listing.findUnique({ where: { id } });
@@ -124,10 +132,12 @@ export async function deleteListing(id: string) {
   return { success: false, error: "Unauthorized" };
 }
 
+// --- READ OPERATIONS ---
 export async function getListing(id: string) {
   return await prisma.listing.findUnique({ where: { id }, include: { user: true } });
 }
 
+// --- FAVORITES ---
 export async function toggleFavorite(listingId: string) {
   try {
     const user = await getAuthenticatedUser();
@@ -159,6 +169,7 @@ export async function getFavoriteStatus(listingId: string) {
   }
 }
 
+// --- PROFILE ---
 export async function updateProfile(formData: FormData) {
   const user = await getAuthenticatedUser();
   await prisma.user.update({
@@ -178,12 +189,14 @@ export async function getUserProfile() {
   return await getAuthenticatedUser();
 }
 
+// --- ANALYTICS ---
 export async function trackContact(id: string, type: 'WHATSAPP' | 'CALL') {
   const field = type === 'WHATSAPP' ? 'whatsappClicks' : 'callClicks';
   await prisma.listing.update({ where: { id }, data: { [field]: { increment: 1 } } });
   return { success: true };
 }
 
+// --- AI COACH ---
 export async function getListingTips(listingId: string) {
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });
   if (!listing) return [];
@@ -191,6 +204,7 @@ export async function getListingTips(listingId: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const prompt = `Analyze this listing (Title: ${listing.title}, Price: ${listing.price}, Views: ${listing.views}). Give 3 short tips to improve sales. Return JSON string array.`;
+    
     const result = await model.generateContent(prompt);
     const text = result.response.text().replace(/```json|```/g, '').trim();
     return JSON.parse(text);
@@ -199,6 +213,7 @@ export async function getListingTips(listingId: string) {
   }
 }
 
+// --- ADMIN ---
 export async function getAdminData() {
   const user = await getAuthenticatedUser();
   if (user.role !== UserRole.ADMIN) throw new Error("Unauthorized");
@@ -223,7 +238,7 @@ export async function deleteListingAdmin(listingId: string) {
     revalidatePath('/admin');
 }
 
-// --- UPDATED SEARCH ACTION ---
+// --- SEARCH & PAGINATION ---
 export async function fetchListings({ 
   filters, 
   page = 1, 
@@ -240,12 +255,10 @@ export async function fetchListings({
       status: 'ACTIVE' 
   };
 
-  // Explicit type check
   if (filters.type && filters.type !== '') {
       whereClause.type = filters.type;
   }
 
-  // Optional string filters
   if (filters.listingCategory) whereClause.listingCategory = filters.listingCategory;
   if (filters.bodyType) whereClause.bodyType = filters.bodyType;
   if (filters.state) whereClause.state = { equals: filters.state, mode: 'insensitive' };
@@ -262,7 +275,6 @@ export async function fetchListings({
     ];
   }
 
-  // Robust Price Check (handles "0" as string)
   if (filters.minPrice !== undefined && filters.minPrice !== '') {
       whereClause.price = { ...whereClause.price, gte: Number(filters.minPrice) };
   }
@@ -275,7 +287,6 @@ export async function fetchListings({
   if (filters.bedrooms) whereClause.bedrooms = { gte: Number(filters.bedrooms) };
   if (filters.propertyType) whereClause.propertyType = filters.propertyType;
 
-  // Sorting
   let orderBy: Prisma.ListingOrderByWithRelationInput = { createdAt: 'desc' };
   if (filters.sort === 'oldest') orderBy = { createdAt: 'asc' };
   if (filters.sort === 'price_asc') orderBy = { price: 'asc' };
@@ -290,4 +301,159 @@ export async function fetchListings({
   });
 
   return listings;
+}
+
+// ============================================
+// --- NEW: CHAT SYSTEM ACTIONS ---
+// ============================================
+
+// 1. START OR GET CHAT
+export async function startChat(listingId: string) {
+  const user = await getAuthenticatedUser();
+  const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+  
+  if (!listing) throw new Error("Listing not found");
+  if (listing.userId === user.id) throw new Error("You cannot chat with yourself");
+
+  // Check if chat already exists
+  const existingChat = await prisma.chatRoom.findFirst({
+    where: {
+      listingId,
+      buyerId: user.id,
+      sellerId: listing.userId
+    }
+  });
+
+  if (existingChat) {
+    return { chatId: existingChat.id };
+  }
+
+  // Create new chat room
+  const newChat = await prisma.chatRoom.create({
+    data: {
+      listingId,
+      buyerId: user.id,
+      sellerId: listing.userId
+    }
+  });
+
+  return { chatId: newChat.id };
+}
+
+// 2. SEND MESSAGE
+export async function sendMessage(chatId: string, text: string) {
+  const user = await getAuthenticatedUser();
+  
+  const chat = await prisma.chatRoom.findUnique({ where: { id: chatId } });
+  if (!chat) throw new Error("Chat not found");
+  
+  // Verify participant
+  if (chat.buyerId !== user.id && chat.sellerId !== user.id) throw new Error("Unauthorized");
+
+  await prisma.message.create({
+    data: {
+      text,
+      chatRoomId: chatId,
+      senderId: user.id
+    }
+  });
+  
+  // Update chat updated_at for sorting
+  await prisma.chatRoom.update({
+      where: { id: chatId },
+      data: { updatedAt: new Date() }
+  });
+
+  // Revalidate the chat page so the new message appears
+  revalidatePath(`/chat/${chatId}`);
+  return { success: true };
+}
+
+// 3. GET MY CHATS (INBOX)
+export async function getMyChats() {
+  const user = await getAuthenticatedUser();
+  
+  const chats = await prisma.chatRoom.findMany({
+    where: {
+      OR: [
+        { buyerId: user.id },
+        { sellerId: user.id }
+      ]
+    },
+    include: {
+      listing: { select: { id: true, title: true, images: true, price: true } },
+      buyer: { select: { id: true, name: true, profileImage: true } },
+      seller: { select: { id: true, name: true, profileImage: true } },
+      messages: {
+        orderBy: { createdAt: 'desc' },
+        take: 1
+      }
+    },
+    orderBy: { updatedAt: 'desc' }
+  });
+  
+  return chats;
+}
+
+// 4. GET SINGLE CHAT DETAILS
+export async function getChatDetails(chatId: string) {
+  const user = await getAuthenticatedUser();
+  
+  const chat = await prisma.chatRoom.findUnique({
+    where: { id: chatId },
+    include: {
+        listing: true,
+        buyer: { select: { id: true, name: true, profileImage: true, email: true } },
+        seller: { select: { id: true, name: true, profileImage: true, email: true } },
+        messages: { orderBy: { createdAt: 'asc' } }
+    }
+  });
+
+  if (!chat) return null;
+  
+  // Security check: Only participants can view
+  if (chat.buyerId !== user.id && chat.sellerId !== user.id) return null; 
+
+  return chat;
+}
+
+// 5. GET UNREAD MESSAGE COUNT (For Navbar Badge)
+export async function getUnreadCount() {
+  try {
+    const user = await getAuthenticatedUser();
+    const count = await prisma.message.count({
+      where: {
+        chatRoom: {
+          OR: [{ buyerId: user.id }, { sellerId: user.id }]
+        },
+        senderId: { not: user.id }, // Messages NOT sent by me
+        isRead: false
+      }
+    });
+    return count;
+  } catch (error) {
+    return 0;
+  }
+}
+
+// 6. MARK CHAT AS READ (Optimized)
+export async function markChatAsRead(chatId: string) {
+  const user = await getAuthenticatedUser();
+  
+  // Update and get the count of modified records
+  const result = await prisma.message.updateMany({
+    where: {
+      chatRoomId: chatId,
+      senderId: { not: user.id },
+      isRead: false
+    },
+    data: { isRead: true }
+  });
+
+  // Only revalidate if we actually marked something as read
+  // This prevents unnecessary page reloads
+  if (result.count > 0) {
+      revalidatePath('/'); // Refresh navbar badge
+      revalidatePath('/chat'); // Refresh inbox status
+  }
 }

@@ -15,7 +15,7 @@ const supabase = createClient(
 );
 
 const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
-const PROPERTY_TYPES = ["Terrace", "Condo", "Bungalow", "Semi-D", "Apartment", "Townhouse", "Shoplot", "Office", "Factory", "Land"];
+const PROPERTY_TYPES = ["Terrace", "Condo", "Bungalow", "Semi-D", "Apartment", "Townhouse", "Shoplot", "Office", "Factory", "Warehouse", "Land", "Hotel"];
 const FACILITIES_LIST = ["Swimming Pool", "Gymnasium", "24H Security", "Parking", "Elevator", "Playground", "Balcony", "Aircon", "Wifi", "Kitchen Cabinet", "Near MRT/LRT", "Garden"];
 
 export default function PostAd() {
@@ -54,7 +54,6 @@ export default function PostAd() {
     const newUrls = newFiles.map(f => URL.createObjectURL(f));
     setPreviews([...previews, ...newUrls].slice(0, 12));
     
-    // AI Analysis Trigger (Only on first upload)
     if (files.length === 0 && newFiles.length > 0) {
       setAiLoading(true);
       const reader = new FileReader();
@@ -126,22 +125,28 @@ export default function PostAd() {
   };
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-6 pt-28 font-sans flex justify-center">
-      <div className="max-w-5xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
+    // FIX: Increased top padding to pt-32 to clear navbar on mobile
+    <div className="min-h-screen bg-neutral-950 text-white p-4 pt-32 md:p-6 md:pt-32 font-sans flex justify-center">
+      <div className="max-w-5xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-6 md:p-8 shadow-2xl">
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
+        {/* Header - Stacked on Mobile for better space */}
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-6 mb-8">
            <div className="flex items-center gap-4">
                 <Link href="/" className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"><ArrowLeft size={20}/></Link>
                 <div>
-                    <h1 className="text-3xl font-bold">New Listing</h1>
-                    <p className="text-gray-500 text-xs uppercase tracking-widest font-bold">Create a Premium Ad</p>
+                    <h1 className="text-2xl md:text-3xl font-bold">New Listing</h1>
+                    <p className="text-gray-500 text-[10px] md:text-xs uppercase tracking-widest font-bold">Create a Premium Ad</p>
                 </div>
            </div>
            
-           <div className="flex bg-black p-1 rounded-xl border border-white/10 self-start md:self-auto">
-               <button type="button" onClick={() => setFormData({...formData, type: 'PROPERTY'})} className={`px-6 py-2 rounded-lg font-bold text-sm transition-colors ${formData.type === 'PROPERTY' ? 'bg-blue-600' : 'text-gray-500 hover:text-white'}`}><Home size={16} className="inline mr-2"/> Property</button>
-               <button type="button" onClick={() => setFormData({...formData, type: 'VEHICLE'})} className={`px-6 py-2 rounded-lg font-bold text-sm transition-colors ${formData.type === 'VEHICLE' ? 'bg-orange-600' : 'text-gray-500 hover:text-white'}`}><Car size={16} className="inline mr-2"/> Vehicle</button>
+           {/* Toggle Switch */}
+           <div className="flex bg-black p-1 rounded-xl border border-white/10 self-stretch md:self-auto">
+               <button type="button" onClick={() => setFormData({...formData, type: 'PROPERTY'})} className={`flex-1 md:flex-none px-6 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${formData.type === 'PROPERTY' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}>
+                   <Home size={16}/> Property
+               </button>
+               <button type="button" onClick={() => setFormData({...formData, type: 'VEHICLE'})} className={`flex-1 md:flex-none px-6 py-2.5 rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 ${formData.type === 'VEHICLE' ? 'bg-orange-600 text-white shadow-lg' : 'text-gray-500 hover:text-white'}`}>
+                   <Car size={16}/> Vehicle
+               </button>
            </div>
         </div>
 
@@ -150,7 +155,7 @@ export default function PostAd() {
           {/* 1. MEDIA */}
           <div className="space-y-2">
               <label className="label">Photos (Max 12)</label>
-              <div className="grid grid-cols-4 gap-4">
+              <div className="grid grid-cols-3 md:grid-cols-4 gap-3 md:gap-4">
                 {files.length < 12 && (
                     <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer transition-colors bg-white/5 hover:bg-white/10">
                         <input type="file" multiple onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
@@ -170,22 +175,22 @@ export default function PostAd() {
           </div>
 
           {/* 2. GENERAL INFO */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-white/5">
-             <div className="col-span-2"><label className="label">Listing Title</label><input name="title" value={formData.title} onChange={handleChange} className="input" placeholder="e.g. Luxury Condo in Mont Kiara" required /></div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-6 border-t border-white/5">
+             <div className="md:col-span-2"><label className="label">Listing Title</label><input name="title" value={formData.title} onChange={handleChange} className="input" placeholder="e.g. Luxury Condo in Mont Kiara" required /></div>
              <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400 font-bold" required /></div>
              
-             <div className="col-span-2 md:col-span-3">
+             <div className="md:col-span-3">
                  <div className="flex items-center gap-2">
                      <input type="checkbox" name="negotiable" checked={formData.negotiable} onChange={handleChange} className="w-4 h-4 rounded border-gray-600 bg-black text-blue-600"/>
                      <span className="text-sm font-bold text-gray-400">Price is Negotiable</span>
                  </div>
              </div>
 
-             <div className="col-span-2 md:col-span-3"><label className="label">Location Name (Project / Building / Dealership)</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon / HX Auto"/></div>
+             <div className="md:col-span-3"><label className="label">Location Name (Project / Building / Dealership)</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon / HX Auto"/></div>
              <div><label className="label">State</label><select name="state" value={formData.state} onChange={handleChange} className="input">{MALAYSIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
              <div><label className="label">Area / City</label><input name="area" value={formData.area} onChange={handleChange} className="input" placeholder="e.g. Batu Kawan"/></div>
              
-             <div className="col-span-2 md:col-span-3">
+             <div className="md:col-span-3">
                 <MapPicker onLocationSelect={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))} searchQuery={`${formData.area}, ${formData.state}, Malaysia`}/>
              </div>
 
@@ -195,7 +200,7 @@ export default function PostAd() {
              )}
              {formData.type === 'VEHICLE' && (<div><label className="label">Condition</label><select name="condition" value={formData.condition} onChange={handleChange} className="input"><option>Recon</option><option>Used</option><option>New</option></select></div>)}
              
-             <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32 leading-relaxed placeholder:text-gray-600" placeholder="Describe the key features, renovations, or vehicle history..." required /></div>
+             <div className="md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32 leading-relaxed placeholder:text-gray-600" placeholder="Describe the key features, renovations, or vehicle history..." required /></div>
           </div>
 
           {/* 3. PROPERTY SPECIFIC FIELDS */}
@@ -252,15 +257,14 @@ export default function PostAd() {
                 <div>
                     <h3 className="text-orange-500 text-xs font-bold uppercase tracking-widest mb-4">Vehicle Information</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {/* ... other inputs ... */}
+                        <div><label className="label">Brand</label><input name="brand" value={formData.brand} onChange={handleChange} className="input"/></div>
+                        <div><label className="label">Model</label><input name="model" value={formData.model} onChange={handleChange} className="input"/></div>
+                        <div><label className="label">Variant</label><input name="variant" value={formData.variant} onChange={handleChange} className="input"/></div>
+                        <div><label className="label">Body Type</label><select name="bodyType" value={formData.bodyType} onChange={handleChange} className="input"><option>Sedan</option><option>SUV</option><option>MPV</option><option>4x4</option><option>Coupe</option><option>Hatchback</option></select></div>
+                        
+                        <div><label className="label">Mfg. Year</label><input type="number" name="year" value={formData.year} onChange={handleChange} className="input"/></div>
                         <div><label className="label">Reg. Year</label><input type="number" name="regYear" value={formData.regYear} onChange={handleChange} className="input"/></div>
-                        
-                        {/* UPDATED MILEAGE INPUT */}
-                        <div>
-                            <label className="label">Mileage (Range Allowed)</label>
-                            <input name="mileage" value={formData.mileage} onChange={handleChange} className="input" placeholder="e.g. 15,000 - 20,000 km"/>
-                        </div>
-                        
+                        <div><label className="label">Mileage (km)</label><input name="mileage" value={formData.mileage} onChange={handleChange} className="input" placeholder="e.g. 15,000 - 20,000 km"/></div>
                         <div><label className="label">Color</label><input name="color" value={formData.color} onChange={handleChange} className="input"/></div>
                     </div>
                 </div>
@@ -270,7 +274,7 @@ export default function PostAd() {
                     <h3 className="text-orange-500 text-xs font-bold uppercase tracking-widest mb-4">Technical Specs</h3>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div><label className="label">Engine CC</label><input type="number" name="engineCC" value={formData.engineCC} onChange={handleChange} className="input"/></div>
-                        <div><label className="label">Transmission</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option><option>CVT</option><option>DCT</option></select></div>
+                        <div><label className="label">Transmission</label><select name="transmission" value={formData.transmission} onChange={handleChange} className="input"><option>Automatic</option><option>Manual</option><option>CVT</option></select></div>
                         <div><label className="label">Fuel Type</label><select name="fuelType" value={formData.fuelType} onChange={handleChange} className="input"><option>Petrol</option><option>Diesel</option><option>Hybrid</option><option>EV</option></select></div>
                         <div><label className="label">Assembly</label><select name="assembly" value={formData.assembly} onChange={handleChange} className="input"><option>CKD (Local)</option><option>CBU (Import)</option></select></div>
                         
@@ -289,11 +293,11 @@ export default function PostAd() {
                         <div><label className="label">Prev. Owners</label><input type="number" name="prevOwners" value={formData.prevOwners} onChange={handleChange} className="input"/></div>
                         
                         <div className="flex items-center gap-2 h-[46px] bg-black/40 border border-white/10 rounded-xl px-4">
-                            <input type="checkbox" name="warranty" checked={formData.warranty} onChange={handleChange} className="w-4 h-4"/>
+                            <input type="checkbox" name="warranty" checked={formData.warranty} onChange={handleChange} className="w-4 h-4 text-orange-500"/>
                             <span className="text-xs font-bold">Under Warranty</span>
                         </div>
                         <div className="flex items-center gap-2 h-[46px] bg-black/40 border border-white/10 rounded-xl px-4">
-                            <input type="checkbox" name="serviceHistory" checked={formData.serviceHistory} onChange={handleChange} className="w-4 h-4"/>
+                            <input type="checkbox" name="serviceHistory" checked={formData.serviceHistory} onChange={handleChange} className="w-4 h-4 text-orange-500"/>
                             <span className="text-xs font-bold">Full Service History</span>
                         </div>
                     </div>
