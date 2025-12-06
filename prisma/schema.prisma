@@ -44,10 +44,15 @@ model User {
   listings     Listing[]
   favorites    Favorite[]
   
-  // --- CHAT RELATIONS ---
+  // Chat Relations
   chatsAsBuyer  ChatRoom[] @relation("BuyerChats")
   chatsAsSeller ChatRoom[] @relation("SellerChats")
   messages      Message[]
+
+  // Trust & Safety Relations
+  reportsMade   Report[]   @relation("UserReports")
+  reviewsGiven  Review[]   @relation("Reviewer")
+  reviewsReceived Review[] @relation("Reviewee")
 }
 
 // 4. FAVORITE MODEL
@@ -148,8 +153,8 @@ model Listing {
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   favorites     Favorite[]
   
-  // --- CHAT RELATION ---
   chats         ChatRoom[]
+  reports       Report[] // NEW: Relation to reports
 
   @@index([type, status, published]) 
   @@index([price])
@@ -171,7 +176,7 @@ model NewsArticle {
   @@index([createdAt])
 }
 
-// 7. CHAT SYSTEM (NEW)
+// 7. CHAT SYSTEM
 model ChatRoom {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
@@ -188,7 +193,7 @@ model ChatRoom {
 
   messages  Message[]
 
-  @@unique([listingId, buyerId, sellerId]) // Prevent duplicate chat rooms
+  @@unique([listingId, buyerId, sellerId])
   @@index([buyerId])
   @@index([sellerId])
 }
@@ -206,4 +211,34 @@ model Message {
   sender     User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
 
   @@index([chatRoomId])
+}
+
+// 8. TRUST & SAFETY (NEW)
+model Report {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  reason    String   // e.g. "Scam", "Duplicate", "Wrong Info"
+  details   String?  // Optional description
+  status    String   @default("PENDING") // PENDING, RESOLVED, DISMISSED
+
+  listingId String
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  reporterId String
+  reporter   User    @relation("UserReports", fields: [reporterId], references: [id], onDelete: Cascade)
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  rating    Int      // 1-5
+  comment   String?
+
+  agentId   String   // The agent being reviewed
+  agent     User     @relation("Reviewee", fields: [agentId], references: [id], onDelete: Cascade)
+
+  reviewerId String  // The user giving the review
+  reviewer   User    @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+
+  @@index([agentId])
 }

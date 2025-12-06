@@ -44,10 +44,8 @@ export async function analyzeImage(imageBase64: string) {
     ]);
 
     const text = result.response.text();
-    // CLEANUP: Remove markdown code blocks if present
     const cleanJson = text.replace(/```json|```/g, '').trim();
     return JSON.parse(cleanJson);
-
   } catch (error) {
     console.error("Gemini AI Failed:", error);
     return null;
@@ -91,10 +89,7 @@ export async function updateListing(formData: FormData) {
 
   const data = parseListingFormData(formData);
 
-  await prisma.listing.update({ 
-      where: { id }, 
-      data: data 
-  });
+  await prisma.listing.update({ where: { id }, data: data });
   
   revalidatePath(`/listing/${id}`);
   revalidatePath('/dashboard');
@@ -213,19 +208,77 @@ export async function getListingTips(listingId: string) {
   }
 }
 
-// --- ADMIN ---
-export async function getAdminData() {
+// ============================================
+// --- ADMIN ACTIONS ---
+// ============================================
+
+export async function getAdminData(searchParams: { 
+    userQ?: string, 
+    listingQ?: string, 
+    userPage?: number, 
+    listingPage?: number 
+} = {}) {
   const user = await getAuthenticatedUser();
   if (user.role !== UserRole.ADMIN) throw new Error("Unauthorized");
 
-  const [totalUsers, totalListings, allListings, allUsers] = await Promise.all([
+  const PAGE_SIZE = 10; 
+
+  const userSkip = ((searchParams.userPage || 1) - 1) * PAGE_SIZE;
+  const listingSkip = ((searchParams.listingPage || 1) - 1) * PAGE_SIZE;
+
+  // Filters
+  const userWhere: Prisma.UserWhereInput = searchParams.userQ ? {
+      OR: [
+          { name: { contains: searchParams.userQ, mode: 'insensitive' } },
+          { email: { contains: searchParams.userQ, mode: 'insensitive' } }
+      ]
+  } : {};
+
+  const listingWhere: Prisma.ListingWhereInput = searchParams.listingQ ? {
+      OR: [
+          { title: { contains: searchParams.listingQ, mode: 'insensitive' } },
+          { location: { contains: searchParams.listingQ, mode: 'insensitive' } }
+      ]
+  } : {};
+
+  const [
+      totalUsers, totalListings, 
+      filteredUsersCount, filteredListingsCount,
+      allListings, allUsers, recentReports
+  ] = await Promise.all([
     prisma.user.count(),
     prisma.listing.count(),
-    prisma.listing.findMany({ include: { user: true }, orderBy: { createdAt: 'desc' }, take: 50 }),
-    prisma.user.findMany({ orderBy: { createdAt: 'desc' }, take: 50 })
+    prisma.user.count({ where: userWhere }),
+    prisma.listing.count({ where: listingWhere }),
+    prisma.listing.findMany({ 
+        where: listingWhere,
+        include: { user: true }, 
+        orderBy: { createdAt: 'desc' }, 
+        skip: listingSkip,
+        take: PAGE_SIZE 
+    }),
+    prisma.user.findMany({ 
+        where: userWhere,
+        orderBy: { createdAt: 'desc' }, 
+        skip: userSkip,
+        take: PAGE_SIZE 
+    }),
+    prisma.report.findMany({
+        where: { status: 'PENDING' },
+        include: { 
+            listing: { select: { id: true, title: true, images: true } },
+            reporter: { select: { name: true, email: true } }
+        },
+        orderBy: { createdAt: 'desc' }
+    })
   ]);
 
-  return { totalUsers, totalListings, allListings, allUsers };
+  return { 
+      totalUsers, totalListings, 
+      allListings, allUsers, recentReports,
+      userTotalPages: Math.ceil(filteredUsersCount / PAGE_SIZE),
+      listingTotalPages: Math.ceil(filteredListingsCount / PAGE_SIZE)
+  };
 }
 
 export async function deleteUserAdmin(userId: string) {
@@ -238,76 +291,10 @@ export async function deleteListingAdmin(listingId: string) {
     revalidatePath('/admin');
 }
 
-// --- SEARCH & PAGINATION ---
-export async function fetchListings({ 
-  filters, 
-  page = 1, 
-  limit = 12 
-}: { 
-  filters: any, 
-  page?: number, 
-  limit?: number 
-}) {
-  const skip = (page - 1) * limit;
-
-  const whereClause: Prisma.ListingWhereInput = { 
-      published: true, 
-      status: 'ACTIVE' 
-  };
-
-  if (filters.type && filters.type !== '') {
-      whereClause.type = filters.type;
-  }
-
-  if (filters.listingCategory) whereClause.listingCategory = filters.listingCategory;
-  if (filters.bodyType) whereClause.bodyType = filters.bodyType;
-  if (filters.state) whereClause.state = { equals: filters.state, mode: 'insensitive' };
-  
-  if (filters.q) {
-    whereClause.OR = [
-      { title: { contains: filters.q, mode: 'insensitive' } },
-      { description: { contains: filters.q, mode: 'insensitive' } },
-      { tags: { contains: filters.q, mode: 'insensitive' } },
-      { state: { contains: filters.q, mode: 'insensitive' } },
-      { area: { contains: filters.q, mode: 'insensitive' } },
-      { brand: { contains: filters.q, mode: 'insensitive' } },
-      { model: { contains: filters.q, mode: 'insensitive' } },
-    ];
-  }
-
-  if (filters.minPrice !== undefined && filters.minPrice !== '') {
-      whereClause.price = { ...whereClause.price, gte: Number(filters.minPrice) };
-  }
-  if (filters.maxPrice !== undefined && filters.maxPrice !== '') {
-      whereClause.price = { ...whereClause.price || {}, lte: Number(filters.maxPrice) };
-  }
-
-  if (filters.brand) whereClause.brand = { contains: filters.brand, mode: 'insensitive' };
-  if (filters.year) whereClause.year = { gte: Number(filters.year) };
-  if (filters.bedrooms) whereClause.bedrooms = { gte: Number(filters.bedrooms) };
-  if (filters.propertyType) whereClause.propertyType = filters.propertyType;
-
-  let orderBy: Prisma.ListingOrderByWithRelationInput = { createdAt: 'desc' };
-  if (filters.sort === 'oldest') orderBy = { createdAt: 'asc' };
-  if (filters.sort === 'price_asc') orderBy = { price: 'asc' };
-  if (filters.sort === 'price_desc') orderBy = { price: 'desc' };
-
-  const listings = await prisma.listing.findMany({
-    where: whereClause,
-    include: { user: true },
-    orderBy: orderBy,
-    skip: skip,
-    take: limit,
-  });
-
-  return listings;
-}
-
 // ============================================
-// --- NEW: CHAT SYSTEM ACTIONS ---
+// --- CHAT ACTIONS ---
 // ============================================
 
-// 1. START OR GET CHAT
 export async function startChat(listingId: string) {
   const user = await getAuthenticatedUser();
   const listing = await prisma.listing.findUnique({ where: { id: listingId } });
@@ -315,7 +302,6 @@ export async function startChat(listingId: string) {
   if (!listing) throw new Error("Listing not found");
   if (listing.userId === user.id) throw new Error("You cannot chat with yourself");
 
-  // Check if chat already exists
   const existingChat = await prisma.chatRoom.findFirst({
     where: {
       listingId,
@@ -324,11 +310,8 @@ export async function startChat(listingId: string) {
     }
   });
 
-  if (existingChat) {
-    return { chatId: existingChat.id };
-  }
+  if (existingChat) return { chatId: existingChat.id };
 
-  // Create new chat room
   const newChat = await prisma.chatRoom.create({
     data: {
       listingId,
@@ -340,45 +323,33 @@ export async function startChat(listingId: string) {
   return { chatId: newChat.id };
 }
 
-// 2. SEND MESSAGE
 export async function sendMessage(chatId: string, text: string) {
   const user = await getAuthenticatedUser();
   
   const chat = await prisma.chatRoom.findUnique({ where: { id: chatId } });
   if (!chat) throw new Error("Chat not found");
   
-  // Verify participant
   if (chat.buyerId !== user.id && chat.sellerId !== user.id) throw new Error("Unauthorized");
 
   await prisma.message.create({
-    data: {
-      text,
-      chatRoomId: chatId,
-      senderId: user.id
-    }
+    data: { text, chatRoomId: chatId, senderId: user.id }
   });
   
-  // Update chat updated_at for sorting
   await prisma.chatRoom.update({
       where: { id: chatId },
       data: { updatedAt: new Date() }
   });
 
-  // Revalidate the chat page so the new message appears
   revalidatePath(`/chat/${chatId}`);
   return { success: true };
 }
 
-// 3. GET MY CHATS (INBOX)
 export async function getMyChats() {
   const user = await getAuthenticatedUser();
   
   const chats = await prisma.chatRoom.findMany({
     where: {
-      OR: [
-        { buyerId: user.id },
-        { sellerId: user.id }
-      ]
+      OR: [{ buyerId: user.id }, { sellerId: user.id }]
     },
     include: {
       listing: { select: { id: true, title: true, images: true, price: true } },
@@ -395,7 +366,6 @@ export async function getMyChats() {
   return chats;
 }
 
-// 4. GET SINGLE CHAT DETAILS
 export async function getChatDetails(chatId: string) {
   const user = await getAuthenticatedUser();
   
@@ -410,23 +380,18 @@ export async function getChatDetails(chatId: string) {
   });
 
   if (!chat) return null;
-  
-  // Security check: Only participants can view
   if (chat.buyerId !== user.id && chat.sellerId !== user.id) return null; 
 
   return chat;
 }
 
-// 5. GET UNREAD MESSAGE COUNT (For Navbar Badge)
 export async function getUnreadCount() {
   try {
     const user = await getAuthenticatedUser();
     const count = await prisma.message.count({
       where: {
-        chatRoom: {
-          OR: [{ buyerId: user.id }, { sellerId: user.id }]
-        },
-        senderId: { not: user.id }, // Messages NOT sent by me
+        chatRoom: { OR: [{ buyerId: user.id }, { sellerId: user.id }] },
+        senderId: { not: user.id },
         isRead: false
       }
     });
@@ -436,11 +401,8 @@ export async function getUnreadCount() {
   }
 }
 
-// 6. MARK CHAT AS READ (Optimized)
 export async function markChatAsRead(chatId: string) {
   const user = await getAuthenticatedUser();
-  
-  // Update and get the count of modified records
   const result = await prisma.message.updateMany({
     where: {
       chatRoomId: chatId,
@@ -450,10 +412,148 @@ export async function markChatAsRead(chatId: string) {
     data: { isRead: true }
   });
 
-  // Only revalidate if we actually marked something as read
-  // This prevents unnecessary page reloads
   if (result.count > 0) {
-      revalidatePath('/'); // Refresh navbar badge
-      revalidatePath('/chat'); // Refresh inbox status
+      revalidatePath('/'); 
+      revalidatePath('/chat');
   }
+}
+
+// ============================================
+// --- TRUST & SAFETY ACTIONS ---
+// ============================================
+
+export async function createReport(listingId: string, reason: string, details: string) {
+  try {
+    const user = await getAuthenticatedUser();
+    await prisma.report.create({
+      data: { listingId, reporterId: user.id, reason, details }
+    });
+    return { success: true };
+  } catch (error) {
+    console.error("Report Error:", error);
+    throw new Error("Failed to submit report");
+  }
+}
+
+export async function resolveReport(reportId: string, action: 'DISMISS' | 'BAN_LISTING') {
+    const user = await getAuthenticatedUser();
+    if (user.role !== 'ADMIN') throw new Error("Unauthorized");
+
+    if (action === 'BAN_LISTING') {
+        const report = await prisma.report.findUnique({ where: { id: reportId } });
+        if (report) {
+            await prisma.listing.delete({ where: { id: report.listingId } });
+        }
+    }
+
+    await prisma.report.update({
+        where: { id: reportId },
+        data: { status: 'RESOLVED' }
+    });
+
+    revalidatePath('/admin');
+}
+
+export async function createReview(agentId: string, rating: number, comment: string) {
+  try {
+    const user = await getAuthenticatedUser();
+    if (user.id === agentId) throw new Error("You cannot review yourself");
+
+    const existing = await prisma.review.findFirst({
+        where: { agentId, reviewerId: user.id }
+    });
+
+    if (existing) throw new Error("You have already reviewed this agent.");
+
+    await prisma.review.create({
+      data: { agentId, reviewerId: user.id, rating, comment }
+    });
+
+    revalidatePath(`/agent/${agentId}`);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: "Failed to submit review" };
+  }
+}
+
+export async function getAgentReviews(agentId: string) {
+  const reviews = await prisma.review.findMany({
+    where: { agentId },
+    include: {
+      reviewer: { select: { name: true, profileImage: true } }
+    },
+    orderBy: { createdAt: 'desc' }
+  });
+  
+  const total = reviews.reduce((sum, r) => sum + r.rating, 0);
+  const average = reviews.length > 0 ? (total / reviews.length).toFixed(1) : "0.0";
+
+  return { reviews, average, count: reviews.length };
+}
+
+// --- SEARCH ACTION ---
+export async function fetchListings({ 
+  filters, 
+  page = 1, 
+  limit = 12 
+}: { 
+  filters: any, 
+  page?: number, 
+  limit?: number 
+}) {
+  const skip = (page - 1) * limit;
+
+  const whereClause: Prisma.ListingWhereInput = { 
+      published: true, 
+      status: 'ACTIVE' 
+  };
+
+  // Explicit filters
+  if (filters.type && filters.type !== '') whereClause.type = filters.type;
+  if (filters.listingCategory) whereClause.listingCategory = filters.listingCategory;
+  if (filters.bodyType) whereClause.bodyType = filters.bodyType;
+  if (filters.state) whereClause.state = { equals: filters.state, mode: 'insensitive' };
+  
+  // Keyword Search
+  if (filters.q) {
+    whereClause.OR = [
+      { title: { contains: filters.q, mode: 'insensitive' } },
+      { description: { contains: filters.q, mode: 'insensitive' } },
+      { tags: { contains: filters.q, mode: 'insensitive' } },
+      { state: { contains: filters.q, mode: 'insensitive' } },
+      { area: { contains: filters.q, mode: 'insensitive' } },
+      { brand: { contains: filters.q, mode: 'insensitive' } },
+      { model: { contains: filters.q, mode: 'insensitive' } },
+    ];
+  }
+
+  // Price
+  if (filters.minPrice !== undefined && filters.minPrice !== '') {
+      whereClause.price = { ...whereClause.price, gte: Number(filters.minPrice) };
+  }
+  if (filters.maxPrice !== undefined && filters.maxPrice !== '') {
+      whereClause.price = { ...whereClause.price || {}, lte: Number(filters.maxPrice) };
+  }
+
+  // Advanced Specs
+  if (filters.brand) whereClause.brand = { contains: filters.brand, mode: 'insensitive' };
+  if (filters.year) whereClause.year = { gte: Number(filters.year) };
+  if (filters.bedrooms) whereClause.bedrooms = { gte: Number(filters.bedrooms) };
+  if (filters.propertyType) whereClause.propertyType = filters.propertyType;
+
+  // Sort
+  let orderBy: Prisma.ListingOrderByWithRelationInput = { createdAt: 'desc' };
+  if (filters.sort === 'oldest') orderBy = { createdAt: 'asc' };
+  if (filters.sort === 'price_asc') orderBy = { price: 'asc' };
+  if (filters.sort === 'price_desc') orderBy = { price: 'desc' };
+
+  const listings = await prisma.listing.findMany({
+    where: whereClause,
+    include: { user: true },
+    orderBy: orderBy,
+    skip: skip,
+    take: limit,
+  });
+
+  return listings;
 }

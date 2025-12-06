@@ -35,7 +35,7 @@ export default function Navbar() {
       };
       
       checkMessages(); 
-      const interval = setInterval(checkMessages, 10000); 
+      const interval = setInterval(checkMessages, 60000); 
       return () => clearInterval(interval);
   }, []);
 

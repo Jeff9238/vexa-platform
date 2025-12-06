@@ -18,6 +18,7 @@ import LoanCalculator from "@/components/LoanCalculator";
 import ContactButtons from "@/components/ContactButtons";
 import FavoriteButton from "@/components/FavoriteButton";
 import BackButton from "@/components/BackButton";
+import ReportModal from "@/components/ReportModal"; // <--- NEW IMPORT
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '700'] });
 const sansFont = Manrope({ subsets: ['latin'], weight: ['300', '500', '700'] });
@@ -218,7 +219,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                                     <LocationMap 
                                         lat={listing.lat} 
                                         lng={listing.lng} 
-                                        hideNearby={isVehicle} // <--- Hide amenities for cars
+                                        hideNearby={isVehicle} 
                                     />
                                 </div>
                             </section>
@@ -230,6 +231,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                                 <LoanCalculator price={listing.price} type={listing.type as any} />
                             </div>
                         )}
+                        
+                        {/* MOBILE REPORT BUTTON (New) */}
+                        <div className="lg:hidden flex justify-center mt-8">
+                            <ReportModal listingId={listing.id} />
+                        </div>
 
                     </div>
 
@@ -269,7 +275,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                                             phone={listing.user.phoneNumber || ''} 
                                             listingId={listing.id}
                                             whatsappUrl={whatsappUrl}
-                                            isOwner={isOwner}
+                                            isOwner={isOwner} // <--- Pass isOwner
                                         />
                                     </div>
                                 </div>
@@ -279,6 +285,12 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                             {!isRent && (
                                 <LoanCalculator price={listing.price} type={listing.type as any} />
                             )}
+
+                            {/* DESKTOP REPORT BUTTON */}
+                            <div className="flex justify-center">
+                                <ReportModal listingId={listing.id} />
+                            </div>
+
                         </div>
                     </div>
 
@@ -292,6 +304,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                 whatsappUrl={whatsappUrl} 
                 agentName={agentName} 
                 agentImage={listing.user.profileImage}
+                isOwner={isOwner} // <--- Pass isOwner
             />
 
         </div>
