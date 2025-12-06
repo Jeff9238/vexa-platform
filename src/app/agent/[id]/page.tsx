@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getAgentReviews } from "@/app/actions"; // <--- New Import
+import { getAgentReviews } from "@/app/actions"; 
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -7,7 +7,7 @@ import { Playfair_Display, Manrope } from 'next/font/google';
 import { Phone, MessageCircle, Globe, CheckCircle, BedDouble, Car, Star, MessageSquare } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import ListingCard from "@/components/ListingCard";
-import ReviewModal from "@/components/ReviewModal"; // <--- New Import
+import ReviewModal from "@/components/ReviewModal"; 
 import { currentUser } from "@clerk/nextjs/server";
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
@@ -82,9 +82,13 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
                         </div>
                     )}
                 </div>
-                <div className="absolute bottom-2 right-2 z-20 bg-blue-600 text-white p-1.5 rounded-full border-4 border-neutral-900" title="Verified Agent">
-                    <CheckCircle size={20} fill="currentColor" className="text-white"/>
-                </div>
+                
+                {/* VERIFIED BADGE (Conditional) */}
+                {agent.verified && (
+                    <div className="absolute bottom-2 right-2 z-20 bg-blue-600 text-white p-1.5 rounded-full border-4 border-neutral-900" title="Verified Agent">
+                        <CheckCircle size={20} fill="currentColor" className="text-white"/>
+                    </div>
+                )}
             </div>
 
             {/* Info */}
@@ -138,7 +142,7 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
             </div>
         </div>
 
-        {/* --- REVIEWS SECTION (New) --- */}
+        {/* --- REVIEWS SECTION --- */}
         {count > 0 && (
             <div className="mb-16">
                 <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-yellow-500"/> Client Reviews</h3>

@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, MapPin, Car, SlidersHorizontal, X, Home, ArrowUpDown } from 'lucide-react';
+import { Search, MapPin, Car, SlidersHorizontal, X, Home, ArrowUpDown, ShieldCheck } from 'lucide-react';
 
 const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
 
@@ -30,9 +30,21 @@ const useFilters = () => {
         brand: searchParams.get('brand') || '',
         listingCategory: searchParams.get('listingCategory') || '',
         sort: searchParams.get('sort') || 'newest',
+        
+        // NEW FILTERS
+        condition: searchParams.get('condition') || '',
+        transmission: searchParams.get('transmission') || '',
+        fuelType: searchParams.get('fuelType') || '',
+        warranty: searchParams.get('warranty') === 'true',
+        
+        tenure: searchParams.get('tenure') || '',
+        furnishing: searchParams.get('furnishing') || '',
+        bedrooms: searchParams.get('bedrooms') || '',
+        
+        verified: searchParams.get('verified') === 'true',
     });
 
-    // 1. Sync State with URL (on Back/Forward or Nav)
+    // Sync with URL changes
     useEffect(() => {
         setFilters(prev => ({
             ...prev,
@@ -42,6 +54,14 @@ const useFilters = () => {
             state: searchParams.get('state') || '',
             brand: searchParams.get('brand') || '',
             sort: searchParams.get('sort') || 'newest',
+            condition: searchParams.get('condition') || '',
+            transmission: searchParams.get('transmission') || '',
+            fuelType: searchParams.get('fuelType') || '',
+            warranty: searchParams.get('warranty') === 'true',
+            tenure: searchParams.get('tenure') || '',
+            furnishing: searchParams.get('furnishing') || '',
+            bedrooms: searchParams.get('bedrooms') || '',
+            verified: searchParams.get('verified') === 'true',
         }));
     }, [searchParams]);
 
@@ -49,45 +69,43 @@ const useFilters = () => {
     const pushToUrl = (currentFilters: typeof filters) => {
         const params = new URLSearchParams();
         Object.entries(currentFilters).forEach(([key, value]) => {
-            if (value) params.set(key, value);
+            if (value) params.set(key, String(value));
         });
         router.push(`/search?${params.toString()}`);
     };
 
-    // 2. Handle Text Inputs (Debounced)
+    // Handle Text Inputs (Debounced)
     const handleChange = (e: any) => {
-        const { name, value } = e.target;
-        
-        // Update local UI immediately
-        setFilters(prev => ({ ...prev, [name]: value }));
+        const { name, value, type, checked } = e.target;
+        const val = type === 'checkbox' ? checked : value;
 
-        // Clear existing timer
-        if (timerRef.current) clearTimeout(timerRef.current);
+        // FIX: Calculate next state first
+        const next = { ...filters, [name]: val };
         
-        // Set new timer
-        timerRef.current = setTimeout(() => {
-            // We use the functional updater here purely to access the LATEST state
-            // safely inside the closure, without adding 'filters' as a dependency.
-            setFilters(latest => {
-                pushToUrl(latest);
-                return latest;
-            });
-        }, 500);
+        // Update UI immediately
+        setFilters(next); 
+
+        // Handle Side Effect (Navigation) outside the setter
+        if (type !== 'checkbox') { 
+            if (timerRef.current) clearTimeout(timerRef.current);
+            timerRef.current = setTimeout(() => pushToUrl(next), 500);
+        } else { 
+            pushToUrl(next);
+        }
     };
 
-    // 3. Handle Buttons/Selects (Immediate)
+    // Handle Buttons/Selects (Immediate)
     const updateFilter = (updates: Partial<typeof filters>) => {
-        // Calculate new state immediately using current scope 'filters'
+        // FIX: Calculate next state first
         const next = { ...filters, ...updates };
         
-        // Update UI state
+        // Update UI
         setFilters(next);
         
-        // Trigger Navigation immediately (Outside of the state setter!)
+        // Navigate
         pushToUrl(next);
     };
 
-    // 4. Special handler for Brands to allow toggling
     const selectBrand = (brandName: string) => {
         const newValue = filters.brand === brandName ? '' : brandName;
         updateFilter({ brand: newValue });
@@ -99,93 +117,69 @@ const useFilters = () => {
 };
 
 const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }: any) => (
-    <div className="space-y-6">
+    <div className="space-y-8 pb-10">
         
-        {/* Sort Order */}
+        {/* 1. ASSET TYPE */}
         <div>
-            <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest flex items-center gap-1.5">
-                <ArrowUpDown size={10}/> Sort By
-            </label>
-            <div className="relative group">
-                <select 
-                    value={filters.sort} 
-                    onChange={(e) => updateFilter({ sort: e.target.value })} 
-                    className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-xs text-white outline-none focus:border-blue-500/50 transition-colors cursor-pointer appearance-none"
-                >
-                    <option value="newest" className="bg-neutral-900">Newest Listed</option>
-                    <option value="oldest" className="bg-neutral-900">Oldest Listed</option>
-                    <option value="price_asc" className="bg-neutral-900">Price: Low to High</option>
-                    <option value="price_desc" className="bg-neutral-900">Price: High to Low</option>
-                </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
+            <label className="text-[10px] text-gray-500 font-bold uppercase mb-2 block tracking-widest">Asset Type</label>
+            <div className="grid grid-cols-3 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+                <button onClick={() => updateFilter({ type: '', brand: '' })} className={`py-2.5 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${!filters.type ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}><span>ALL</span></button>
+                <button onClick={() => updateFilter({ type: 'PROPERTY', brand: '' })} className={`py-2.5 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${filters.type === 'PROPERTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}><Home size={14}/> <span>Property</span></button>
+                <button onClick={() => updateFilter({ type: 'VEHICLE', listingCategory: '' })} className={`py-2.5 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${filters.type === 'VEHICLE' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}><Car size={14}/> <span>Vehicle</span></button>
+            </div>
+        </div>
+
+        {/* 2. CATEGORY & VERIFIED */}
+        <div className="space-y-4">
+            {filters.type !== 'VEHICLE' && (
+                <div>
+                    <label className="text-[10px] text-gray-500 font-bold uppercase mb-2 block tracking-widest">Category</label>
+                    <div className="grid grid-cols-3 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
+                        <button onClick={() => updateFilter({ listingCategory: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${!filters.listingCategory ? 'bg-white text-black' : 'text-gray-500 hover:text-white'}`}>Any</button>
+                        <button onClick={() => updateFilter({ listingCategory: 'SALE' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${filters.listingCategory === 'SALE' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'}`}>Buy</button>
+                        <button onClick={() => updateFilter({ listingCategory: 'RENT' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${filters.listingCategory === 'RENT' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white'}`}>Rent</button>
+                    </div>
+                </div>
+            )}
+            
+            {/* Verified Toggle */}
+            <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5">
+                <span className="text-xs font-bold text-white flex items-center gap-2"><ShieldCheck size={14} className="text-blue-500"/> Verified Only</span>
+                <input type="checkbox" name="verified" checked={filters.verified} onChange={handleChange} className="w-4 h-4 accent-blue-600 rounded bg-neutral-800 border-white/20"/>
+            </div>
+        </div>
+
+        {/* 3. LOCATION & PRICE */}
+        <div className="space-y-4">
+            <div>
+                <label className="text-[10px] text-gray-500 font-bold uppercase mb-2 block">Location</label>
+                <div className="flex items-center bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 relative">
+                    <MapPin size={14} className="text-gray-500 mr-2.5"/>
+                    <select name="state" value={filters.state} onChange={(e) => updateFilter({ state: e.target.value })} className="w-full bg-transparent text-xs text-white outline-none cursor-pointer appearance-none relative z-10">
+                        <option value="" className="bg-neutral-900">All Malaysia</option>
+                        {MALAYSIA_STATES.map(s => <option key={s} value={s} className="bg-neutral-900">{s}</option>)}
+                    </select>
                     <ChevronDownIcon />
                 </div>
             </div>
-        </div>
-        
-        {/* Asset Type */}
-        <div>
-            <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">Asset Type</label>
-            <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5">
-                <button onClick={() => updateFilter({ type: '', brand: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${!filters.type ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                    <span>ALL</span>
-                </button>
-                <button onClick={() => updateFilter({ type: 'PROPERTY', brand: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${filters.type === 'PROPERTY' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                    <Home size={12}/> <span>Property</span>
-                </button>
-                <button onClick={() => updateFilter({ type: 'VEHICLE', listingCategory: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all flex flex-col items-center gap-1 ${filters.type === 'VEHICLE' ? 'bg-orange-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                    <Car size={12}/> <span>Vehicle</span>
-                </button>
-            </div>
-        </div>
 
-        {/* Listing Category (Sale vs Rent) */}
-        {filters.type !== 'VEHICLE' && (
             <div>
-                <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">Listing Category</label>
-                <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5">
-                    <button onClick={() => updateFilter({ listingCategory: '' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${!filters.listingCategory ? 'bg-white text-black shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                        Any
-                    </button>
-                    <button onClick={() => updateFilter({ listingCategory: 'SALE' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${filters.listingCategory === 'SALE' ? 'bg-green-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                        Buy
-                    </button>
-                    <button onClick={() => updateFilter({ listingCategory: 'RENT' })} className={`py-2 rounded-lg text-[10px] font-bold transition-all ${filters.listingCategory === 'RENT' ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-500 hover:text-white hover:bg-white/5'}`}>
-                        Rent
-                    </button>
-                </div>
-            </div>
-        )}
-
-        {/* Search & Location */}
-        <div className="space-y-3">
-            <div>
-                <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Keywords</label>
-                <div className="flex items-center bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus-within:border-blue-500/50 focus-within:bg-black/40 transition-all">
-                    <Search size={14} className="text-gray-500 mr-2.5"/>
-                    <input name="q" value={filters.q} onChange={handleChange} placeholder="Model, Project..." className="w-full bg-transparent text-xs text-white outline-none placeholder:text-gray-600 font-medium"/>
-                </div>
-            </div>
-            <div>
-                <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block">Location</label>
-                <div className="flex items-center bg-white/5 border border-white/10 rounded-lg px-3 py-2 focus-within:border-blue-500/50 focus-within:bg-black/40 transition-all relative">
-                    <MapPin size={14} className="text-gray-500 mr-2.5"/>
-                    <select name="state" value={filters.state} onChange={(e) => updateFilter({ state: e.target.value })} className="w-full bg-transparent text-xs text-white outline-none cursor-pointer appearance-none relative z-10">
-                        <option value="" className="bg-neutral-900 text-gray-500">All Malaysia</option>
-                        {MALAYSIA_STATES.map(s => <option key={s} value={s} className="bg-neutral-900">{s}</option>)}
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                        <ChevronDownIcon />
-                    </div>
+                <label className="text-[10px] text-gray-500 font-bold uppercase mb-2 block tracking-widest">Price (RM)</label>
+                <div className="flex items-center gap-2">
+                    <input type="number" name="minPrice" value={filters.minPrice} onChange={handleChange} placeholder="Min" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500/50 transition-all"/>
+                    <span className="text-gray-600">-</span>
+                    <input type="number" name="maxPrice" value={filters.maxPrice} onChange={handleChange} placeholder="Max" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-blue-500/50 transition-all"/>
                 </div>
             </div>
         </div>
 
-        {/* Vehicle Brands */}
+        {/* 4. VEHICLE FILTERS */}
         {filters.type === 'VEHICLE' && (
-            <div>
-                <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">Brands</label>
-                <div className="grid grid-cols-3 gap-1.5 mb-2">
+            <div className="space-y-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-left-2">
+                <p className="text-xs font-bold text-orange-500 flex items-center gap-2"><Car size={14}/> Vehicle Options</p>
+                
+                {/* Brands */}
+                <div className="grid grid-cols-3 gap-2">
                     {POPULAR_BRANDS.map((b) => (
                         <button key={b.code} onClick={() => selectBrand(b.code)} className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${filters.brand === b.code ? 'bg-white text-black border-white' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}>
                             {b.name}
@@ -193,39 +187,77 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
                     ))}
                 </div>
                 <div className="relative">
-                    <select name="brand" value={filters.brand} onChange={(e) => updateFilter({ brand: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-400 outline-none focus:border-blue-500/50 transition-colors appearance-none cursor-pointer">
+                    <select name="brand" value={filters.brand} onChange={(e) => updateFilter({ brand: e.target.value })} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-400 outline-none appearance-none cursor-pointer">
                         <option value="" className="bg-neutral-900">Other Brands...</option>
                         {ALL_BRANDS.map(b => <option key={b} value={b} className="bg-neutral-900">{b}</option>)}
                     </select>
-                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
-                        <ChevronDownIcon />
-                    </div>
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500"><ChevronDownIcon /></div>
+                </div>
+
+                {/* Condition / Transmission / Fuel */}
+                <div className="grid grid-cols-2 gap-3">
+                    <select name="condition" value={filters.condition} onChange={handleChange} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none">
+                        <option value="">Any Condition</option>
+                        <option value="New">New</option>
+                        <option value="Used">Used</option>
+                        <option value="Recon">Recon</option>
+                    </select>
+                    <select name="transmission" value={filters.transmission} onChange={handleChange} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none">
+                        <option value="">Any Trans.</option>
+                        <option value="Automatic">Automatic</option>
+                        <option value="Manual">Manual</option>
+                    </select>
+                    <select name="fuelType" value={filters.fuelType} onChange={handleChange} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none col-span-2">
+                        <option value="">Any Fuel Type</option>
+                        <option value="Petrol">Petrol</option>
+                        <option value="Diesel">Diesel</option>
+                        <option value="Hybrid">Hybrid</option>
+                        <option value="EV">Electric</option>
+                    </select>
+                </div>
+
+                {/* Warranty Check */}
+                <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
+                    <input type="checkbox" name="warranty" checked={filters.warranty} onChange={handleChange} className="w-4 h-4 rounded bg-neutral-800 border-white/20 accent-orange-500"/>
+                    Under Warranty Only
+                </label>
+            </div>
+        )}
+
+        {/* 5. PROPERTY FILTERS */}
+        {filters.type === 'PROPERTY' && (
+            <div className="space-y-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-left-2">
+                <p className="text-xs font-bold text-blue-500 flex items-center gap-2"><Home size={14}/> Property Options</p>
+                
+                <div className="grid grid-cols-2 gap-3">
+                    <select name="tenure" value={filters.tenure} onChange={handleChange} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none">
+                        <option value="">Any Tenure</option>
+                        <option value="Freehold">Freehold</option>
+                        <option value="Leasehold">Leasehold</option>
+                    </select>
+                    <select name="bedrooms" value={filters.bedrooms} onChange={handleChange} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none">
+                        <option value="">Any Beds</option>
+                        <option value="1">1+</option>
+                        <option value="2">2+</option>
+                        <option value="3">3+</option>
+                        <option value="4">4+</option>
+                    </select>
+                    <select name="furnishing" value={filters.furnishing} onChange={handleChange} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none col-span-2">
+                        <option value="">Any Furnishing</option>
+                        <option value="Fully Furnished">Fully Furnished</option>
+                        <option value="Partly Furnished">Partly Furnished</option>
+                        <option value="Unfurnished">Unfurnished</option>
+                    </select>
                 </div>
             </div>
         )}
 
-        {/* Price Range */}
-        <div>
-             <label className="text-[10px] text-gray-500 font-bold uppercase mb-1.5 block tracking-widest">Price Range</label>
-             <div className="flex items-center gap-2">
-                 <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-sans">RM</span>
-                    <input type="number" name="minPrice" value={filters.minPrice} onChange={handleChange} placeholder="Min" className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-xs text-white outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-600"/>
-                 </div>
-                 <span className="text-gray-600 text-[10px]">-</span>
-                 <div className="relative flex-1">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-sans">RM</span>
-                    <input type="number" name="maxPrice" value={filters.maxPrice} onChange={handleChange} placeholder="Max" className="w-full bg-white/5 border border-white/10 rounded-lg pl-8 pr-3 py-2 text-xs text-white outline-none focus:border-blue-500/50 transition-all placeholder:text-gray-600"/>
-                 </div>
-             </div>
-        </div>
-
-        <button onClick={reset} className="w-full py-2.5 text-[10px] font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors tracking-widest uppercase">Reset Filters</button>
+        <button onClick={reset} className="w-full py-3 text-[10px] font-bold text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-lg transition-colors tracking-widest uppercase">Reset All Filters</button>
     </div>
 );
 
 const ChevronDownIcon = () => (
-    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <svg width="10" height="6" viewBox="0 0 10 6" fill="none" xmlns="http://www.w3.org/2000/svg" className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500">
         <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
     </svg>
 );
@@ -233,7 +265,7 @@ const ChevronDownIcon = () => (
 export default function FilterSidebar() {
   const logic = useFilters();
   return (
-    <div className="hidden lg:block bg-neutral-900 border border-white/10 p-5 rounded-2xl h-fit w-72 shadow-xl shadow-black/20">
+    <div className="hidden lg:block bg-neutral-900 border border-white/10 p-5 rounded-2xl h-fit w-72 shadow-xl shadow-black/20 sticky top-36">
         <div className="flex items-center justify-between mb-5 border-b border-white/5 pb-4">
              <h3 className="font-bold flex items-center gap-2 text-white text-sm"><SlidersHorizontal size={16} className="text-blue-500"/> Filter & Sort</h3>
              <button onClick={logic.reset} className="text-[10px] text-gray-500 hover:text-white transition-colors">Reset</button>
@@ -252,34 +284,21 @@ export function FilterMobileTrigger() {
 
     return (
         <>
-            <button 
-                onClick={() => setIsOpen(true)} 
-                className="lg:hidden flex items-center gap-2 bg-neutral-800/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg text-white font-bold shadow-lg active:scale-95 transition-transform text-[10px] uppercase tracking-wider hover:bg-neutral-700"
-            >
+            <button onClick={() => setIsOpen(true)} className="lg:hidden flex items-center gap-2 bg-neutral-800/80 backdrop-blur-md border border-white/10 px-3 py-1.5 rounded-lg text-white font-bold shadow-lg active:scale-95 transition-transform text-[10px] uppercase tracking-wider hover:bg-neutral-700">
                 <SlidersHorizontal size={12} className="text-blue-400"/> Filter
             </button>
 
             {isOpen && mounted && createPortal(
                 <div className="fixed inset-0 z-[9999] flex justify-end">
-                    <div 
-                        className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
-                        onClick={() => setIsOpen(false)}
-                    />
-                    
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsOpen(false)}/>
                     <div className="relative w-full max-w-[320px] bg-[#121212] h-full p-6 overflow-y-auto border-l border-white/10 shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
                         <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#121212] z-10 py-2 border-b border-white/5">
                             <h2 className="text-lg font-bold text-white flex items-center gap-2"><SlidersHorizontal size={18} className="text-blue-500"/> Filters</h2>
                             <button onClick={() => setIsOpen(false)} className="p-2 bg-white/5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><X size={18}/></button>
                         </div>
-
-                        <div className="flex-grow pb-24">
-                            <FilterForm {...logic} />
-                        </div>
-
+                        <div className="flex-grow pb-24"><FilterForm {...logic} /></div>
                         <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-[#121212] to-transparent">
-                            <button onClick={() => setIsOpen(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all text-sm">
-                                View Results
-                            </button>
+                            <button onClick={() => setIsOpen(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all text-sm">View Results</button>
                         </div>
                     </div>
                 </div>,

@@ -291,6 +291,24 @@ export async function deleteListingAdmin(listingId: string) {
     revalidatePath('/admin');
 }
 
+export async function verifyUser(userId: string) {
+    const user = await getAuthenticatedUser();
+    if (user.role !== UserRole.ADMIN) throw new Error("Unauthorized");
+
+    // 1. Get current status to toggle it
+    const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+    if (!targetUser) return;
+
+    // 2. Toggle status
+    await prisma.user.update({
+        where: { id: userId },
+        data: { verified: !targetUser.verified }
+    });
+
+    revalidatePath('/admin');
+    revalidatePath(`/agent/${userId}`);
+}
+
 // ============================================
 // --- CHAT ACTIONS ---
 // ============================================
@@ -508,38 +526,50 @@ export async function fetchListings({
       status: 'ACTIVE' 
   };
 
-  // Explicit filters
+  // Basic Filters
   if (filters.type && filters.type !== '') whereClause.type = filters.type;
   if (filters.listingCategory) whereClause.listingCategory = filters.listingCategory;
-  if (filters.bodyType) whereClause.bodyType = filters.bodyType;
   if (filters.state) whereClause.state = { equals: filters.state, mode: 'insensitive' };
-  
+
   // Keyword Search
   if (filters.q) {
     whereClause.OR = [
       { title: { contains: filters.q, mode: 'insensitive' } },
       { description: { contains: filters.q, mode: 'insensitive' } },
       { tags: { contains: filters.q, mode: 'insensitive' } },
-      { state: { contains: filters.q, mode: 'insensitive' } },
-      { area: { contains: filters.q, mode: 'insensitive' } },
+      { location: { contains: filters.q, mode: 'insensitive' } },
       { brand: { contains: filters.q, mode: 'insensitive' } },
       { model: { contains: filters.q, mode: 'insensitive' } },
     ];
   }
 
   // Price
-  if (filters.minPrice !== undefined && filters.minPrice !== '') {
-      whereClause.price = { ...whereClause.price, gte: Number(filters.minPrice) };
-  }
-  if (filters.maxPrice !== undefined && filters.maxPrice !== '') {
-      whereClause.price = { ...whereClause.price || {}, lte: Number(filters.maxPrice) };
+  if (filters.minPrice) whereClause.price = { ...whereClause.price, gte: Number(filters.minPrice) };
+  if (filters.maxPrice) whereClause.price = { ...whereClause.price || {}, lte: Number(filters.maxPrice) };
+
+  // --- NEW ADVANCED FILTERS ---
+  
+  // Verified Only
+  if (filters.verified) {
+      // Assuming you have a 'verified' boolean on listing OR checking the user's verification
+      // For now, let's check the listing's verified status
+      whereClause.verified = true; 
   }
 
-  // Advanced Specs
+  // Vehicle Specific
+  if (filters.condition) whereClause.condition = filters.condition;
+  if (filters.transmission) whereClause.transmission = filters.transmission;
+  if (filters.fuelType) whereClause.fuelType = filters.fuelType;
+  if (filters.warranty) whereClause.warranty = true;
   if (filters.brand) whereClause.brand = { contains: filters.brand, mode: 'insensitive' };
-  if (filters.year) whereClause.year = { gte: Number(filters.year) };
-  if (filters.bedrooms) whereClause.bedrooms = { gte: Number(filters.bedrooms) };
-  if (filters.propertyType) whereClause.propertyType = filters.propertyType;
+
+  // Property Specific
+  if (filters.tenure) whereClause.tenure = filters.tenure;
+  if (filters.furnishing) whereClause.furnishing = filters.furnishing;
+  
+  if (filters.bedrooms) {
+      whereClause.bedrooms = { gte: Number(filters.bedrooms) };
+  }
 
   // Sort
   let orderBy: Prisma.ListingOrderByWithRelationInput = { createdAt: 'desc' };

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { prisma } from "@/lib/prisma";
 import { currentUser } from "@clerk/nextjs/server";
-import { getAdminData, deleteUserAdmin, deleteListingAdmin, resolveReport } from '@/app/actions';
+import { getAdminData, deleteUserAdmin, deleteListingAdmin, resolveReport, verifyUser } from '@/app/actions';
 import { Playfair_Display, Manrope } from 'next/font/google';
 import { ShieldAlert, Users, LayoutList, Trash2, ExternalLink, ArrowLeft, CheckCircle, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
@@ -76,7 +76,7 @@ export default async function AdminPage({
                 <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                     <h2 className="text-xl font-bold mb-6 flex items-center gap-2 text-red-400"><AlertTriangle size={20}/> Trust & Safety Alerts</h2>
                     
-                    {/* MOBILE: Stacked Cards */}
+                    {/* MOBILE: Stacked Cards (Auto Adjust Block) */}
                     <div className="md:hidden space-y-4">
                         {recentReports.map(report => (
                             <div key={report.id} className="bg-red-950/10 border border-red-900/30 p-5 rounded-2xl space-y-4">
@@ -146,7 +146,7 @@ export default async function AdminPage({
                     <AdminSearch placeholder="Search Listing..." paramKey="listingQ" />
                 </div>
 
-                {/* MOBILE: Listing Cards */}
+                {/* MOBILE: Listing Cards (Auto Adjust) */}
                 <div className="md:hidden grid gap-4">
                     {allListings.map(item => (
                         <div key={item.id} className="bg-neutral-900 border border-white/10 p-4 rounded-2xl flex gap-4 items-start">
@@ -185,11 +185,9 @@ export default async function AdminPage({
                                     </td>
                                     <td className="p-4 text-white">{item.user.name}</td>
                                     <td className="p-4 font-mono">RM {item.price.toLocaleString()}</td>
-                                    <td className="p-4 text-right flexjustify-end gap-2">
-                                        <div className="flex justify-end gap-2">
-                                            <Link href={`/listing/${item.id}`} target="_blank" className="p-2 hover:bg-blue-900/30 text-blue-400 rounded-lg"><ExternalLink size={16}/></Link>
-                                            <ListingDeleteButton id={item.id} />
-                                        </div>
+                                    <td className="p-4 text-right flex justify-end gap-2">
+                                        <Link href={`/listing/${item.id}`} target="_blank" className="p-2 hover:bg-blue-900/30 text-blue-400 rounded-lg"><ExternalLink size={16}/></Link>
+                                        <ListingDeleteButton id={item.id} />
                                     </td>
                                 </tr>
                             ))}
@@ -206,18 +204,26 @@ export default async function AdminPage({
                     <AdminSearch placeholder="Search User..." paramKey="userQ" />
                 </div>
 
-                {/* MOBILE: User Cards */}
+                {/* MOBILE: User Cards (Auto Adjust) */}
                 <div className="md:hidden grid gap-4">
                     {allUsers.map(u => (
                         <div key={u.id} className="bg-neutral-900 border border-white/10 p-4 rounded-2xl flex items-center justify-between">
                             <div>
-                                <p className="text-white font-bold text-sm">{u.name}</p>
+                                <div className="flex items-center gap-2">
+                                    <p className="text-white font-bold text-sm">{u.name}</p>
+                                    {u.verified && <CheckCircle size={12} className="text-blue-400"/>}
+                                </div>
                                 <p className="text-xs text-gray-500 mb-2">{u.email}</p>
                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${u.role === 'ADMIN' ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>{u.role}</span>
                             </div>
-                            <div className="text-right">
-                                <p className="text-xs text-gray-400 mb-2">{u.credits} Credits</p>
-                                {u.role !== 'ADMIN' && <UserBanButton id={u.id} />}
+                            <div className="text-right flex flex-col gap-2 items-end">
+                                <p className="text-xs text-gray-400">{u.credits} Credits</p>
+                                {u.role !== 'ADMIN' && (
+                                    <div className="flex gap-2">
+                                        <UserVerifyButton id={u.id} isVerified={u.verified} />
+                                        <UserBanButton id={u.id} />
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
@@ -232,11 +238,24 @@ export default async function AdminPage({
                         <tbody className="divide-y divide-white/5">
                             {allUsers.map(u => (
                                 <tr key={u.id} className="hover:bg-white/5 transition-colors">
-                                    <td className="p-4"><div><p className="text-white font-bold">{u.name}</p><p className="text-xs">{u.email}</p></div></td>
+                                    <td className="p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div>
+                                                <p className="text-white font-bold">{u.name}</p>
+                                                <p className="text-xs text-gray-500">{u.email}</p>
+                                            </div>
+                                            {u.verified && <span className="px-2 py-0.5 bg-blue-900/40 text-blue-400 rounded text-[10px] font-bold border border-blue-800/50">VERIFIED</span>}
+                                        </div>
+                                    </td>
                                     <td className="p-4"><span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${u.role === 'ADMIN' ? 'bg-red-900 text-red-200' : 'bg-blue-900 text-blue-200'}`}>{u.role}</span></td>
                                     <td className="p-4 font-mono">{u.credits}</td>
                                     <td className="p-4 text-right">
-                                        {u.role !== 'ADMIN' && <UserBanButton id={u.id} />}
+                                        {u.role !== 'ADMIN' && (
+                                            <div className="flex justify-end gap-2">
+                                                <UserVerifyButton id={u.id} isVerified={u.verified} />
+                                                <UserBanButton id={u.id} />
+                                            </div>
+                                        )}
                                     </td>
                                 </tr>
                             ))}
@@ -282,7 +301,17 @@ function ListingDeleteButton({ id }: { id: string }) {
 function UserBanButton({ id }: { id: string }) {
     return (
         <form action={async () => { 'use server'; await deleteUserAdmin(id) }}>
-            <button className="p-2 hover:bg-red-900/30 text-red-400 rounded-lg flex items-center gap-2 text-xs font-bold justify-end w-full md:w-auto"><Trash2 size={14}/> BAN</button>
+            <button className="p-2 hover:bg-red-900/30 text-red-400 rounded-lg flex items-center gap-2 text-xs font-bold justify-end" title="Ban User"><Trash2 size={16}/></button>
+        </form>
+    );
+}
+
+function UserVerifyButton({ id, isVerified }: { id: string, isVerified: boolean }) {
+    return (
+        <form action={async () => { 'use server'; await verifyUser(id) }}>
+            <button className={`p-2 rounded-lg flex items-center gap-2 text-xs font-bold transition-all ${isVerified ? 'bg-blue-900/30 text-blue-400 hover:bg-blue-900/50' : 'bg-neutral-800 text-gray-400 hover:text-white hover:bg-neutral-700'}`} title={isVerified ? "Unverify" : "Verify"}>
+                <CheckCircle size={16}/>
+            </button>
         </form>
     );
 }
