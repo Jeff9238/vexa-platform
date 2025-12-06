@@ -1,11 +1,13 @@
 import { prisma } from "@/lib/prisma";
+import { getAgentReviews } from "@/app/actions"; // <--- New Import
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Playfair_Display, Manrope } from 'next/font/google';
-import { Phone, MessageCircle, Globe, CheckCircle, BedDouble, Car } from "lucide-react";
+import { Phone, MessageCircle, Globe, CheckCircle, BedDouble, Car, Star, MessageSquare } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import ListingCard from "@/components/ListingCard";
+import ReviewModal from "@/components/ReviewModal"; // <--- New Import
 import { currentUser } from "@clerk/nextjs/server";
 
 const serifFont = Playfair_Display({ subsets: ['latin'], weight: ['400', '600', '800'] });
@@ -31,12 +33,12 @@ async function getMyFavoriteIds() {
 export default async function AgentProfile({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
-  // 1. Fetch Agent & Their Listings
+  // 1. Fetch Agent & Listings
   const agent = await prisma.user.findUnique({
     where: { id },
     include: {
         listings: {
-            where: { published: true },
+            where: { published: true, status: 'ACTIVE' },
             orderBy: { createdAt: 'desc' },
             include: { user: true }
         }
@@ -45,17 +47,18 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
 
   if (!agent) notFound();
 
-  // 2. Fetch Favorites
+  // 2. Fetch Reviews & Favs
+  const { reviews, average, count } = await getAgentReviews(id);
   const myFavs = await getMyFavoriteIds();
+  const user = await currentUser();
+  const isMe = user?.emailAddresses[0]?.emailAddress === agent.email;
 
   // Stats
   const propertyCount = agent.listings.filter(l => l.type === 'PROPERTY').length;
   const vehicleCount = agent.listings.filter(l => l.type === 'VEHICLE').length;
 
   const phone = agent.phoneNumber ? agent.phoneNumber.replace(/[^0-9]/g, '') : '';
-  const whatsappUrl = phone 
-    ? `https://wa.me/${phone}?text=Hi ${agent.name}, I found your profile on VEXA.`
-    : null;
+  const whatsappUrl = phone ? `https://wa.me/${phone}?text=Hi ${agent.name}, I found your profile on VEXA.` : null;
 
   return (
     <div className={`min-h-screen bg-[#0a0a0a] text-white ${sansFont.className}`}>
@@ -66,26 +69,19 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
         {/* --- PROFILE HEADER --- */}
         <div className="bg-neutral-900 border border-white/10 rounded-3xl p-8 md:p-12 mb-16 flex flex-col md:flex-row gap-10 items-center md:items-start relative overflow-hidden shadow-2xl">
             
-            {/* Background Decor */}
             <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/10 blur-[100px] rounded-full pointer-events-none"></div>
 
             {/* Avatar */}
             <div className="relative w-40 h-40 flex-shrink-0">
                 <div className="w-full h-full rounded-full overflow-hidden border-4 border-neutral-800 shadow-2xl relative z-10 bg-neutral-800">
                     {agent.profileImage ? (
-                        <Image 
-                            src={agent.profileImage} 
-                            alt={agent.name || "Agent"} 
-                            fill 
-                            className="object-cover"
-                        />
+                        <Image src={agent.profileImage} alt={agent.name || "Agent"} fill className="object-cover"/>
                     ) : (
                         <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-gray-500 bg-neutral-800">
                             {agent.name?.substring(0,1).toUpperCase()}
                         </div>
                     )}
                 </div>
-                {/* Verified Badge */}
                 <div className="absolute bottom-2 right-2 z-20 bg-blue-600 text-white p-1.5 rounded-full border-4 border-neutral-900" title="Verified Agent">
                     <CheckCircle size={20} fill="currentColor" className="text-white"/>
                 </div>
@@ -94,31 +90,33 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
             {/* Info */}
             <div className="flex-grow text-center md:text-left z-10">
                 <h1 className={`text-4xl md:text-5xl font-bold mb-2 ${serifFont.className}`}>{agent.name}</h1>
-                <p className="text-gray-400 mb-6 flex items-center justify-center md:justify-start gap-2">
-                    <span className="bg-white/10 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider text-white">VEXA Agent</span>
+                
+                {/* Rating Badge */}
+                <div className="flex items-center justify-center md:justify-start gap-4 mb-6">
+                    <div className="flex items-center gap-1 text-yellow-500 bg-yellow-500/10 px-3 py-1 rounded-full border border-yellow-500/20">
+                        <Star size={14} fill="currentColor"/> 
+                        <span className="text-sm font-bold">{average}</span>
+                        <span className="text-xs text-gray-500 ml-1">({count} reviews)</span>
+                    </div>
                     {agent.website && (
-                        <a href={agent.website} target="_blank" className="flex items-center gap-1 hover:text-blue-400 transition-colors text-sm">
+                        <a href={agent.website} target="_blank" className="flex items-center gap-1 hover:text-blue-400 transition-colors text-sm text-gray-400">
                             <Globe size={14}/> Website
                         </a>
                     )}
-                </p>
+                </div>
 
-                {/* Bio */}
                 <div className="max-w-2xl text-gray-300 leading-relaxed mb-8">
                     {agent.bio ? agent.bio : <span className="italic opacity-50">No biography provided.</span>}
                 </div>
 
-                {/* Action Buttons */}
-                <div className="flex flex-wrap justify-center md:justify-start gap-4">
+                <div className="flex flex-wrap justify-center md:justify-start gap-3">
                     {whatsappUrl && (
                         <a href={whatsappUrl} target="_blank" className="bg-[#25D366] hover:bg-[#1ebc50] text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg shadow-green-900/20">
                             <MessageCircle size={20}/> WhatsApp
                         </a>
                     )}
-                    {phone && (
-                        <a href={`tel:${phone}`} className="bg-white hover:bg-gray-200 text-black px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all">
-                            <Phone size={20}/> Call Agent
-                        </a>
+                    {!isMe && (
+                        <ReviewModal agentId={agent.id} />
                     )}
                 </div>
             </div>
@@ -139,6 +137,38 @@ export default async function AgentProfile({ params }: { params: Promise<{ id: s
                 </div>
             </div>
         </div>
+
+        {/* --- REVIEWS SECTION (New) --- */}
+        {count > 0 && (
+            <div className="mb-16">
+                <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><MessageSquare size={20} className="text-yellow-500"/> Client Reviews</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {reviews.map((review) => (
+                        <div key={review.id} className="bg-neutral-900 border border-white/5 p-6 rounded-2xl">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 bg-neutral-800 rounded-full overflow-hidden relative">
+                                        {review.reviewer.profileImage ? (
+                                            <Image src={review.reviewer.profileImage} alt="User" fill className="object-cover"/>
+                                        ) : (
+                                            <div className="w-full h-full flex items-center justify-center text-xs text-white">{review.reviewer.name?.substring(0,1)}</div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-bold text-white">{review.reviewer.name}</p>
+                                        <p className="text-[10px] text-gray-500">{new Date(review.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-1 bg-yellow-500/10 px-2 py-1 rounded text-yellow-500 text-xs font-bold">
+                                    <Star size={12} fill="currentColor"/> {review.rating}
+                                </div>
+                            </div>
+                            <p className="text-gray-400 text-sm leading-relaxed italic">"{review.comment}"</p>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        )}
 
         {/* --- LISTINGS GRID --- */}
         <h2 className={`text-3xl font-bold mb-8 flex items-center gap-3 ${serifFont.className}`}>
