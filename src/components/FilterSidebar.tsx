@@ -4,19 +4,21 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, MapPin, Car, SlidersHorizontal, X, Home, ArrowUpDown, ShieldCheck } from 'lucide-react';
+import SaveSearchButton from './SaveSearchButton'; 
 
-const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
+// --- EXPORT THESE CONSTANTS ---
+export const MALAYSIA_STATES = ["Penang", "Selangor", "Kuala Lumpur", "Johor", "Kedah", "Perak", "Melaka", "Negeri Sembilan", "Pahang", "Terengganu", "Kelantan", "Perlis", "Sabah", "Sarawak", "Putrajaya", "Labuan"];
 
-const POPULAR_BRANDS = [
+export const POPULAR_BRANDS = [
     { name: "Perodua", code: "Perodua" }, { name: "Proton", code: "Proton" },
     { name: "Honda", code: "Honda" }, { name: "Toyota", code: "Toyota" },
     { name: "BMW", code: "BMW" }, { name: "Mercedes", code: "Mercedes-Benz" },
 ];
 
-const ALL_BRANDS = ["Perodua", "Proton", "Honda", "Toyota", "BMW", "Mercedes-Benz", "Mazda", "Nissan", "Mitsubishi", "Ford", "Subaru", "Volkswagen", "Hyundai", "Kia", "Peugeot", "Volvo", "Porsche", "Lexus", "Audi", "Mini", "Suzuki"];
+export const ALL_BRANDS = ["Perodua", "Proton", "Honda", "Toyota", "BMW", "Mercedes-Benz", "Mazda", "Nissan", "Mitsubishi", "Ford", "Subaru", "Volkswagen", "Hyundai", "Kia", "Peugeot", "Volvo", "Porsche", "Lexus", "Audi", "Mini", "Suzuki"];
 
-// Shared Logic Hook
-const useFilters = () => {
+// --- EXPORT THIS HOOK ---
+export const useFilters = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
     const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -30,21 +32,16 @@ const useFilters = () => {
         brand: searchParams.get('brand') || '',
         listingCategory: searchParams.get('listingCategory') || '',
         sort: searchParams.get('sort') || 'newest',
-        
-        // NEW FILTERS
         condition: searchParams.get('condition') || '',
         transmission: searchParams.get('transmission') || '',
         fuelType: searchParams.get('fuelType') || '',
         warranty: searchParams.get('warranty') === 'true',
-        
         tenure: searchParams.get('tenure') || '',
         furnishing: searchParams.get('furnishing') || '',
         bedrooms: searchParams.get('bedrooms') || '',
-        
         verified: searchParams.get('verified') === 'true',
     });
 
-    // Sync with URL changes
     useEffect(() => {
         setFilters(prev => ({
             ...prev,
@@ -65,7 +62,6 @@ const useFilters = () => {
         }));
     }, [searchParams]);
 
-    // Helper to push URL
     const pushToUrl = (currentFilters: typeof filters) => {
         const params = new URLSearchParams();
         Object.entries(currentFilters).forEach(([key, value]) => {
@@ -74,18 +70,12 @@ const useFilters = () => {
         router.push(`/search?${params.toString()}`);
     };
 
-    // Handle Text Inputs (Debounced)
     const handleChange = (e: any) => {
         const { name, value, type, checked } = e.target;
         const val = type === 'checkbox' ? checked : value;
-
-        // FIX: Calculate next state first
         const next = { ...filters, [name]: val };
-        
-        // Update UI immediately
         setFilters(next); 
 
-        // Handle Side Effect (Navigation) outside the setter
         if (type !== 'checkbox') { 
             if (timerRef.current) clearTimeout(timerRef.current);
             timerRef.current = setTimeout(() => pushToUrl(next), 500);
@@ -94,15 +84,9 @@ const useFilters = () => {
         }
     };
 
-    // Handle Buttons/Selects (Immediate)
     const updateFilter = (updates: Partial<typeof filters>) => {
-        // FIX: Calculate next state first
         const next = { ...filters, ...updates };
-        
-        // Update UI
         setFilters(next);
-        
-        // Navigate
         pushToUrl(next);
     };
 
@@ -116,10 +100,11 @@ const useFilters = () => {
     return { filters, handleChange, selectBrand, updateFilter, reset };
 };
 
-const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }: any) => (
+// --- EXPORT THIS COMPONENT ---
+export const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }: any) => (
     <div className="space-y-8 pb-10">
         
-        {/* 1. ASSET TYPE */}
+        {/* ASSET TYPE */}
         <div>
             <label className="text-[10px] text-gray-500 font-bold uppercase mb-2 block tracking-widest">Asset Type</label>
             <div className="grid grid-cols-3 gap-2 p-1 bg-black/40 rounded-xl border border-white/5">
@@ -129,7 +114,7 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
             </div>
         </div>
 
-        {/* 2. CATEGORY & VERIFIED */}
+        {/* CATEGORY & VERIFIED */}
         <div className="space-y-4">
             {filters.type !== 'VEHICLE' && (
                 <div>
@@ -142,14 +127,13 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
                 </div>
             )}
             
-            {/* Verified Toggle */}
             <div className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5">
                 <span className="text-xs font-bold text-white flex items-center gap-2"><ShieldCheck size={14} className="text-blue-500"/> Verified Only</span>
                 <input type="checkbox" name="verified" checked={filters.verified} onChange={handleChange} className="w-4 h-4 accent-blue-600 rounded bg-neutral-800 border-white/20"/>
             </div>
         </div>
 
-        {/* 3. LOCATION & PRICE */}
+        {/* LOCATION & PRICE */}
         <div className="space-y-4">
             <div>
                 <label className="text-[10px] text-gray-500 font-bold uppercase mb-2 block">Location</label>
@@ -173,12 +157,11 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
             </div>
         </div>
 
-        {/* 4. VEHICLE FILTERS */}
+        {/* VEHICLE FILTERS */}
         {filters.type === 'VEHICLE' && (
             <div className="space-y-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-left-2">
                 <p className="text-xs font-bold text-orange-500 flex items-center gap-2"><Car size={14}/> Vehicle Options</p>
                 
-                {/* Brands */}
                 <div className="grid grid-cols-3 gap-2">
                     {POPULAR_BRANDS.map((b) => (
                         <button key={b.code} onClick={() => selectBrand(b.code)} className={`py-2 rounded-lg text-[10px] font-bold border transition-all ${filters.brand === b.code ? 'bg-white text-black border-white' : 'bg-white/5 border-white/5 text-gray-400 hover:bg-white/10'}`}>
@@ -194,7 +177,6 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-500"><ChevronDownIcon /></div>
                 </div>
 
-                {/* Condition / Transmission / Fuel */}
                 <div className="grid grid-cols-2 gap-3">
                     <select name="condition" value={filters.condition} onChange={handleChange} className="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 outline-none">
                         <option value="">Any Condition</option>
@@ -216,7 +198,6 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
                     </select>
                 </div>
 
-                {/* Warranty Check */}
                 <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer">
                     <input type="checkbox" name="warranty" checked={filters.warranty} onChange={handleChange} className="w-4 h-4 rounded bg-neutral-800 border-white/20 accent-orange-500"/>
                     Under Warranty Only
@@ -224,7 +205,7 @@ const FilterForm = ({ filters, handleChange, selectBrand, updateFilter, reset }:
             </div>
         )}
 
-        {/* 5. PROPERTY FILTERS */}
+        {/* PROPERTY FILTERS */}
         {filters.type === 'PROPERTY' && (
             <div className="space-y-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-left-2">
                 <p className="text-xs font-bold text-blue-500 flex items-center gap-2"><Home size={14}/> Property Options</p>
@@ -262,6 +243,7 @@ const ChevronDownIcon = () => (
     </svg>
 );
 
+// 1. DESKTOP SIDEBAR
 export default function FilterSidebar() {
   const logic = useFilters();
   return (
@@ -275,6 +257,7 @@ export default function FilterSidebar() {
   );
 }
 
+// 2. MOBILE BOTTOM SHEET
 export function FilterMobileTrigger() {
     const [isOpen, setIsOpen] = useState(false);
     const [mounted, setMounted] = useState(false);
@@ -289,16 +272,28 @@ export function FilterMobileTrigger() {
             </button>
 
             {isOpen && mounted && createPortal(
-                <div className="fixed inset-0 z-[9999] flex justify-end">
+                <div className="fixed inset-0 z-[9999] flex items-end justify-center">
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsOpen(false)}/>
-                    <div className="relative w-full max-w-[320px] bg-[#121212] h-full p-6 overflow-y-auto border-l border-white/10 shadow-2xl animate-in slide-in-from-right duration-300 flex flex-col">
-                        <div className="flex items-center justify-between mb-6 sticky top-0 bg-[#121212] z-10 py-2 border-b border-white/5">
-                            <h2 className="text-lg font-bold text-white flex items-center gap-2"><SlidersHorizontal size={18} className="text-blue-500"/> Filters</h2>
-                            <button onClick={() => setIsOpen(false)} className="p-2 bg-white/5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><X size={18}/></button>
+                    
+                    <div className="relative w-full bg-[#121212] max-h-[85vh] h-auto rounded-t-3xl border-t border-white/10 shadow-2xl animate-in slide-in-from-bottom duration-300 flex flex-col">
+                        <div className="flex flex-col items-center pt-3 pb-4 sticky top-0 bg-[#121212] z-20 border-b border-white/5 rounded-t-3xl">
+                            <div className="w-12 h-1.5 bg-neutral-800 rounded-full mb-4"></div>
+                            <div className="flex items-center justify-between w-full px-6">
+                                <h2 className="text-lg font-bold text-white flex items-center gap-2"><SlidersHorizontal size={18} className="text-blue-500"/> Filters</h2>
+                                <button onClick={() => setIsOpen(false)} className="p-2 bg-white/5 rounded-full text-gray-400 hover:text-white hover:bg-white/10 transition-colors"><X size={18}/></button>
+                            </div>
                         </div>
-                        <div className="flex-grow pb-24"><FilterForm {...logic} /></div>
-                        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-[#121212] to-transparent">
-                            <button onClick={() => setIsOpen(false)} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all text-sm">View Results</button>
+                        <div className="flex-grow overflow-y-auto px-6 py-4 pb-32 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                            <FilterForm {...logic} />
+                        </div>
+                        <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black via-[#121212] to-transparent z-30 flex gap-3">
+                             {/* NEW: MOBILE SAVE SEARCH BUTTON */}
+                            <div className="flex-shrink-0">
+                                <SaveSearchButton filters={logic.filters} />
+                            </div>
+                            <button onClick={() => setIsOpen(false)} className="flex-grow w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 transition-all text-sm">
+                                View {logic.filters.listingCategory ? logic.filters.listingCategory : ''} Results
+                            </button>
                         </div>
                     </div>
                 </div>,

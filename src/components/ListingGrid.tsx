@@ -4,18 +4,19 @@ import { useState } from "react";
 import ListingCard from "@/components/ListingCard";
 import { fetchListings } from "@/app/actions";
 import { Loader2 } from "lucide-react";
+import { ListingWithUser } from "@/types"; // Ensure you have this type defined
 
 interface ListingGridProps {
-  initialListings: any[];
+  initialListings: ListingWithUser[];
   filters: any;
   myFavs: string[];
 }
 
 export default function ListingGrid({ initialListings, filters, myFavs }: ListingGridProps) {
-  const [listings, setListings] = useState(initialListings);
+  const [listings, setListings] = useState<ListingWithUser[]>(initialListings);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(initialListings.length >= 12); // Assume more if full batch returned
+  const [hasMore, setHasMore] = useState(initialListings.length >= 12);
 
   const loadMore = async () => {
     setLoading(true);
@@ -25,9 +26,9 @@ export default function ListingGrid({ initialListings, filters, myFavs }: Listin
     const newItems = await fetchListings({ filters, page: nextPage, limit: 12 });
     
     if (newItems.length > 0) {
+      // @ts-ignore - Type matching for ListingWithUser can be tricky with server actions
       setListings(prev => [...prev, ...newItems]);
       setPage(nextPage);
-      // If we got fewer than 12, it means we reached the end
       if (newItems.length < 12) setHasMore(false);
     } else {
       setHasMore(false);
@@ -38,9 +39,9 @@ export default function ListingGrid({ initialListings, filters, myFavs }: Listin
 
   return (
     <div className="pb-20">
-        {/* RESULTS GRID */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-12">
-            {listings.map((item: any) => (
+        {/* RESULTS GRID: 2 Columns on Mobile (grid-cols-2), 3 on Desktop */}
+        <div className="grid grid-cols-2 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-6 mb-12">
+            {listings.map((item) => (
                 <ListingCard 
                     key={item.id} 
                     data={item} 

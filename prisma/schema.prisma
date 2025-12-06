@@ -54,6 +54,9 @@ model User {
   reportsMade   Report[]   @relation("UserReports")
   reviewsGiven  Review[]   @relation("Reviewer")
   reviewsReceived Review[] @relation("Reviewee")
+
+  // User Retention (FIXED: Added this relation)
+  savedSearches SavedSearch[]
 }
 
 // 4. FAVORITE MODEL
@@ -155,7 +158,7 @@ model Listing {
   favorites     Favorite[]
   
   chats         ChatRoom[]
-  reports       Report[] // NEW: Relation to reports
+  reports       Report[]
 
   @@index([type, status, published]) 
   @@index([price])
@@ -214,13 +217,13 @@ model Message {
   @@index([chatRoomId])
 }
 
-// 8. TRUST & SAFETY (NEW)
+// 8. TRUST & SAFETY
 model Report {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
-  reason    String   // e.g. "Scam", "Duplicate", "Wrong Info"
-  details   String?  // Optional description
-  status    String   @default("PENDING") // PENDING, RESOLVED, DISMISSED
+  reason    String   
+  details   String?  
+  status    String   @default("PENDING") 
 
   listingId String
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
@@ -232,14 +235,38 @@ model Report {
 model Review {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
-  rating    Int      // 1-5
+  rating    Int      
   comment   String?
 
-  agentId   String   // The agent being reviewed
+  agentId   String   
   agent     User     @relation("Reviewee", fields: [agentId], references: [id], onDelete: Cascade)
 
-  reviewerId String  // The user giving the review
+  reviewerId String  
   reviewer   User    @relation("Reviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
 
   @@index([agentId])
+}
+
+// 9. SAVED SEARCHES (USER RETENTION)
+model SavedSearch {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  
+  // Search Criteria
+  type            String?  
+  query           String?  
+  minPrice        Float?
+  maxPrice        Float?
+  state           String?
+  
+  // Specifics
+  brand           String?
+  model           String?
+  propertyType    String?
+  listingCategory String? 
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

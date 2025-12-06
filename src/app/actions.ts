@@ -587,3 +587,43 @@ export async function fetchListings({
 
   return listings;
 }
+
+// ============================================
+// --- USER RETENTION (SAVED SEARCH) ---
+// ============================================
+
+export async function saveSearch(filters: any) {
+  const user = await getAuthenticatedUser();
+  
+  await prisma.savedSearch.create({
+    data: {
+      userId: user.id,
+      type: filters.type || 'ALL',
+      query: filters.q || null,
+      minPrice: filters.minPrice ? Number(filters.minPrice) : null,
+      maxPrice: filters.maxPrice ? Number(filters.maxPrice) : null,
+      state: filters.state || null,
+      brand: filters.brand || null,
+      propertyType: filters.propertyType || null,
+      listingCategory: filters.listingCategory || null
+    }
+  });
+
+  return { success: true };
+}
+
+export async function getSavedSearches() {
+    const user = await getAuthenticatedUser();
+    return await prisma.savedSearch.findMany({
+        where: { userId: user.id },
+        orderBy: { createdAt: 'desc' }
+    });
+}
+
+export async function deleteSavedSearch(id: string) {
+    const user = await getAuthenticatedUser();
+    await prisma.savedSearch.delete({
+        where: { id, userId: user.id }
+    });
+    revalidatePath('/dashboard');
+}
