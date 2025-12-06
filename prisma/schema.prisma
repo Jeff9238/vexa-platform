@@ -1,72 +1,9 @@
-// 1. CONNECTION
-generator client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
-}
-
-// Enums for Strict Typing
-enum UserRole {
-  USER
-  ADMIN
-}
-
-enum ListingStatus {
-  ACTIVE
-  SOLD
-  HIDDEN
-}
-
-enum ListingType {
-  PROPERTY
-  VEHICLE
-}
-
-// 2. USER
-model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  name         String?
-  role         UserRole @default(USER)
-  credits      Int      @default(0)
-  
-  // --- PROFILE FIELDS ---
-  phoneNumber  String?
-  bio          String?
-  website      String?
-  profileImage String?
-  
-  createdAt    DateTime @default(now())
-  listings     Listing[]
-  favorites    Favorite[]
-}
-
-// 3. FAVORITE
-model Favorite {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  
-  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  listingId String
-
-  @@unique([userId, listingId]) // Prevent duplicate favorites
-  @@index([userId]) // Faster lookup for "My Favorites" page
-}
-
-// 4. LISTING
 model Listing {
   id           String   @id @default(uuid())
   title        String
   description  String
   price        Float
-  type         String   // Keeping String for flexibility, but mapped to logic
+  type         String   
   tags         String
   images       String
   location     String   @default("Malaysia")
@@ -77,7 +14,6 @@ model Listing {
   locationName String?
   lat          Float?
   lng          Float?
-  
   status       ListingStatus @default(ACTIVE) 
   
   condition    String?
@@ -90,17 +26,25 @@ model Listing {
   whatsappClicks  Int      @default(0)
   callClicks      Int      @default(0)
   
-  // Property Fields
+  // --- PROPERTY FIELDS (Updated) ---
   bedrooms      Int?
   bathrooms     Int?
   sqft          Int?
   carParks      Int?
   propertyType  String?
   furnishing    String?
-  listingCategory String? // SALE or RENT
+  listingCategory String?
   facilities    String?
+  
+  // NEW PROPERTY FIELDS
+  tenure        String?  // Freehold / Leasehold
+  propertyTitle String?  // Individual / Strata
+  landArea      Int?     // For Landed
+  unitType      String?  // Intermediate / Corner
+  maintenanceFee Float?  // For Stratified properties
+  occupancy     String?  // Vacant / Tenanted
 
-  // Vehicle Fields
+  // --- VEHICLE FIELDS (Updated) ---
   brand         String?
   model         String?
   year          Int?
@@ -117,28 +61,19 @@ model Listing {
   peakPower     Int?
   peakTorque    Int?
 
+  // NEW VEHICLE FIELDS
+  warranty      Boolean? // True if Under Warranty
+  serviceHistory Boolean? // True if Full Service History
+  wheelSize     Int?     // e.g. 19 inch
+  plateNumber   String?  // e.g. "P" or "W"
+
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   favorites     Favorite[]
 
-  // --- PERFORMANCE INDEXES ---
-  // Vital for search page speed
   @@index([type, status, published]) 
   @@index([price])
   @@index([state])
   @@index([brand])
   @@index([createdAt])
-}
-
-// 5. NEWS ARTICLE
-model NewsArticle {
-  id        String   @id @default(uuid())
-  title     String
-  summary   String
-  content   String   // Full article (HTML or Markdown)
-  category  String   // "Property" or "Vehicle"
-  imageUrl  String
-  createdAt DateTime @default(now())
-
-  @@index([createdAt]) // Fast sorting for news feed
 }

@@ -2,7 +2,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
-import { revalidatePath } from "next/cache";
+// Removed revalidatePath import as it cannot be used during render
 import { createClient } from '@supabase/supabase-js';
 
 // 1. Initialize Supabase (for storing generated images)
@@ -82,8 +82,8 @@ export async function checkAndGenerateNews() {
         latest.imageUrl.includes("source.unsplash.com") || 
         latest.imageUrl.includes("via.placeholder.com") ||
         latest.imageUrl.includes("image_unavailable") ||
-        latest.imageUrl === FALLBACK_PROPERTY || // <--- FIX: Retry if using Property Fallback
-        latest.imageUrl === FALLBACK_VEHICLE     // <--- FIX: Retry if using Vehicle Fallback
+        latest.imageUrl === FALLBACK_PROPERTY || 
+        latest.imageUrl === FALLBACK_VEHICLE
     )) {
         console.log("Attempting to upgrade image to AI for:", latest.title);
         
@@ -96,7 +96,7 @@ export async function checkAndGenerateNews() {
                 where: { id: latest.id },
                 data: { imageUrl: newImage }
             });
-            revalidatePath('/');
+            // FIX: Removed revalidatePath here to prevent render error
             return;
         } else {
              console.log("AI still unavailable. Keeping fallback.");
@@ -155,8 +155,8 @@ export async function checkAndGenerateNews() {
       }
     });
 
-    revalidatePath('/');
-    revalidatePath('/news');
+    // FIX: Removed revalidatePath('/') and revalidatePath('/news')
+    // This prevents the "Route / used revalidatePath during render" error.
     
   } catch (error) {
     console.error("News Gen Error:", error);

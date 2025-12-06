@@ -28,9 +28,9 @@ export default function PostAd() {
   
   const [formData, setFormData] = useState({
     title: '', description: '', price: '', 
-    area: '', state: 'Penang', locationName: '', // NEW FIELD
+    area: '', state: 'Penang', locationName: '', 
     lat: null as number | null, lng: null as number | null, 
-    type: 'VEHICLE', tags: '', condition: 'Recon',
+    type: 'PROPERTY', tags: '', condition: 'Recon',
     
     listingCategory: 'SALE',
     propertyType: 'Terrace', bedrooms: '', bathrooms: '', carParks: '', sqft: '', furnishing: 'Partly Furnished',
@@ -123,18 +123,19 @@ export default function PostAd() {
   const handleChange = (e: any) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   return (
-    <div className="min-h-screen bg-neutral-950 text-white p-6 font-sans flex justify-center">
+    // FIX: Added pt-28 to push content below fixed navbar
+    <div className="min-h-screen bg-neutral-950 text-white p-6 pt-28 font-sans flex justify-center">
       <div className="max-w-5xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
         
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-8">
            <div className="flex items-center gap-4">
-                <Link href="/" className="p-2 bg-white/5 rounded-full"><ArrowLeft size={20}/></Link>
+                <Link href="/" className="p-2 bg-white/5 rounded-full hover:bg-white/10 transition-colors"><ArrowLeft size={20}/></Link>
                 <h1 className="text-3xl font-bold">New Listing</h1>
            </div>
            
-           <div className="flex bg-black p-1 rounded-xl border border-white/10">
-               <button type="button" onClick={() => setFormData({...formData, type: 'PROPERTY'})} className={`px-6 py-2 rounded-lg font-bold text-sm ${formData.type === 'PROPERTY' ? 'bg-blue-600' : 'text-gray-500'}`}><Home size={16} className="inline mr-2"/> Property</button>
-               <button type="button" onClick={() => setFormData({...formData, type: 'VEHICLE'})} className={`px-6 py-2 rounded-lg font-bold text-sm ${formData.type === 'VEHICLE' ? 'bg-orange-600' : 'text-gray-500'}`}><Car size={16} className="inline mr-2"/> Vehicle</button>
+           <div className="flex bg-black p-1 rounded-xl border border-white/10 self-start md:self-auto">
+               <button type="button" onClick={() => setFormData({...formData, type: 'PROPERTY'})} className={`px-6 py-2 rounded-lg font-bold text-sm transition-colors ${formData.type === 'PROPERTY' ? 'bg-blue-600' : 'text-gray-500 hover:text-white'}`}><Home size={16} className="inline mr-2"/> Property</button>
+               <button type="button" onClick={() => setFormData({...formData, type: 'VEHICLE'})} className={`px-6 py-2 rounded-lg font-bold text-sm transition-colors ${formData.type === 'VEHICLE' ? 'bg-orange-600' : 'text-gray-500 hover:text-white'}`}><Car size={16} className="inline mr-2"/> Vehicle</button>
            </div>
         </div>
 
@@ -143,7 +144,7 @@ export default function PostAd() {
           {/* IMAGE GRID */}
           <div className="grid grid-cols-4 gap-4">
             {files.length < 8 && (
-                <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer">
+                <div className="relative aspect-square border-2 border-dashed border-neutral-700 rounded-xl flex items-center justify-center hover:border-blue-500 cursor-pointer transition-colors bg-white/5 hover:bg-white/10">
                     <input type="file" multiple onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer z-10" />
                     <Upload className="text-blue-500" />
                 </div>
@@ -162,33 +163,30 @@ export default function PostAd() {
           {/* BASIC INFO */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6 pt-6 border-t border-white/5">
              <div className="col-span-2"><label className="label">Title</label><input name="title" value={formData.title} onChange={handleChange} className="input" placeholder="e.g. Luxury Condo in KL" /></div>
-             <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400" /></div>
+             <div><label className="label">Price (RM)</label><input name="price" type="number" value={formData.price} onChange={handleChange} className="input text-green-400 font-bold" /></div>
              
-             {/* NEW: LOCATION NAME */}
+             {/* LOCATION NAME */}
              <div className="col-span-2 md:col-span-3"><label className="label">Building / Project Name / Dealership</label><input name="locationName" value={formData.locationName} onChange={handleChange} className="input" placeholder="e.g. Eco Horizon, Queensbay Mall, HX Auto"/></div>
 
              <div><label className="label">State</label><select name="state" value={formData.state} onChange={handleChange} className="input">{MALAYSIA_STATES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
              <div><label className="label">Area</label><input name="area" value={formData.area} onChange={handleChange} className="input" placeholder="e.g. Simpang Ampat"/></div>
              
              <div className="col-span-2 md:col-span-3">
-                {/* MAP PICKER WITH AUTO-SEARCH */}
-             <div className="col-span-2 md:col-span-3">
+                {/* MAP PICKER */}
                 <MapPicker 
                     onLocationSelect={handleLocationSelect} 
-                    // Pass the text query: "Simpang Ampat, Penang, Malaysia"
                     searchQuery={`${formData.area}, ${formData.state}, Malaysia`}
                 />
              </div>
-             </div>
 
              {formData.type === 'PROPERTY' && (
-                 <div><label className="label">Listing Category</label><div className="flex bg-black p-1 rounded-lg border border-white/10"><button type="button" onClick={() => setFormData({...formData, listingCategory: 'SALE'})} className={`flex-1 py-2 text-xs font-bold rounded ${formData.listingCategory === 'SALE' ? 'bg-green-600 text-white' : 'text-gray-500'}`}>SALE</button><button type="button" onClick={() => setFormData({...formData, listingCategory: 'RENT'})} className={`flex-1 py-2 text-xs font-bold rounded ${formData.listingCategory === 'RENT' ? 'bg-purple-600 text-white' : 'text-gray-500'}`}>RENT</button></div></div>
+                 <div><label className="label">Listing Category</label><div className="flex bg-black p-1 rounded-lg border border-white/10"><button type="button" onClick={() => setFormData({...formData, listingCategory: 'SALE'})} className={`flex-1 py-2 text-xs font-bold rounded ${formData.listingCategory === 'SALE' ? 'bg-green-600 text-white' : 'text-gray-500 hover:text-white'}`}>SALE</button><button type="button" onClick={() => setFormData({...formData, listingCategory: 'RENT'})} className={`flex-1 py-2 text-xs font-bold rounded ${formData.listingCategory === 'RENT' ? 'bg-purple-600 text-white' : 'text-gray-500 hover:text-white'}`}>RENT</button></div></div>
              )}
              {formData.type === 'VEHICLE' && (<div><label className="label">Condition</label><select name="condition" value={formData.condition} onChange={handleChange} className="input"><option>Recon</option><option>Used</option><option>New</option></select></div>)}
-             <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-24" /></div>
+             <div className="col-span-2 md:col-span-3"><label className="label">Description</label><textarea name="description" value={formData.description} onChange={handleChange} className="input h-32 leading-relaxed" /></div>
           </div>
 
-          {/* SPECS FORMS (Unchanged from previous steps) */}
+          {/* SPECS FORMS */}
           {formData.type === 'PROPERTY' && (
             <div className="space-y-6 pt-6 border-t border-white/5">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -224,13 +222,13 @@ export default function PostAd() {
             </div>
           )}
 
-          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl mt-4">{loading ? <Loader2 className="animate-spin inline"/> : "Post Listing"}</button>
+          <button type="submit" disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl mt-4 flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20">{loading ? <Loader2 className="animate-spin inline"/> : "Post Listing"}</button>
         </form>
       </div>
       <style jsx>{`
         .label { display: block; font-size: 0.7rem; color: #6b7280; font-weight: bold; text-transform: uppercase; margin-bottom: 0.25rem; }
         .input { width: 100%; background: #171717; border: 1px solid #262626; padding: 0.75rem; border-radius: 0.75rem; color: white; outline: none; transition: 0.2s; }
-        .input:focus { border-color: #2563eb; }
+        .input:focus { border-color: #2563eb; background: #0a0a0a; }
       `}</style>
     </div>
   );
