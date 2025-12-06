@@ -1,22 +1,86 @@
+// 1. CONNECTION CONFIGURATION
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// 2. ENUMS
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ListingStatus {
+  ACTIVE
+  SOLD
+  HIDDEN
+}
+
+enum ListingType {
+  PROPERTY
+  VEHICLE
+}
+
+// 3. USER MODEL
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  name         String?
+  role         UserRole @default(USER)
+  credits      Int      @default(0)
+  
+  // Profile
+  phoneNumber  String?
+  bio          String?
+  website      String?
+  profileImage String?
+  createdAt    DateTime @default(now())
+  
+  listings     Listing[]
+  favorites    Favorite[]
+}
+
+// 4. FAVORITE MODEL
+model Favorite {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listingId String
+
+  @@unique([userId, listingId])
+  @@index([userId])
+}
+
+// 5. LISTING MODEL (UPGRADED)
 model Listing {
   id           String   @id @default(uuid())
   title        String
   description  String
   price        Float
+  negotiable   Boolean  @default(false)
   type         String   
   tags         String
   images       String
-  location     String   @default("Malaysia")
   
-  // Location Split
+  // Location
+  location     String   @default("Malaysia")
   area         String   @default("City")
   state        String   @default("Malaysia")
   locationName String?
   lat          Float?
   lng          Float?
-  status       ListingStatus @default(ACTIVE) 
   
-  condition    String?
+  status       ListingStatus @default(ACTIVE) 
+  condition    String?  // New/Used/Recon
   verified     Boolean  @default(false)
   published    Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -26,54 +90,76 @@ model Listing {
   whatsappClicks  Int      @default(0)
   callClicks      Int      @default(0)
   
-  // --- PROPERTY FIELDS (Updated) ---
+  // --- PROPERTY SPECIFIC ---
+  listingCategory String? // SALE / RENT
+  propertyType  String?   // Terrace, Condo, etc.
+  tenure        String?   // Freehold / Leasehold
+  propertyTitle String?   // Strata / Individual / Master
+  landTitle     String?   // Residential / Commercial / Industrial
+  
   bedrooms      Int?
   bathrooms     Int?
-  sqft          Int?
   carParks      Int?
-  propertyType  String?
-  furnishing    String?
-  listingCategory String?
-  facilities    String?
   
-  // NEW PROPERTY FIELDS
-  tenure        String?  // Freehold / Leasehold
-  propertyTitle String?  // Individual / Strata
-  landArea      Int?     // For Landed
-  unitType      String?  // Intermediate / Corner
-  maintenanceFee Float?  // For Stratified properties
-  occupancy     String?  // Vacant / Tenanted
+  sqft          Int?      // Build-up Size
+  landArea      Int?      // Land Size (for landed)
+  
+  furnishing    String?   // Fully / Partly / Unfurnished
+  unitType      String?   // Intermediate / Corner / End Lot / Penthouse
+  occupancy     String?   // Vacant / Tenanted / Owner Occupied
+  maintenanceFee Float?   // RM per month
+  
+  facilities    String?
 
-  // --- VEHICLE FIELDS (Updated) ---
+  // --- VEHICLE SPECIFIC ---
   brand         String?
   model         String?
-  year          Int?
   variant       String?
   series        String?
+  
+  year          Int?      // Manufactured Year
+  regYear       Int?      // Registration Year
+  
+  bodyType      String?
   color         String?
-  mileage       Int?
+  mileage       String?
   transmission  String?
   fuelType      String?
-  bodyType      String?
-  seats         Int?
-  origin        String?
   engineCC      Int?
+  
+  assembly      String?   // CBU / CKD
+  seats         Int?
+  
   peakPower     Int?
   peakTorque    Int?
-
-  // NEW VEHICLE FIELDS
-  warranty      Boolean? // True if Under Warranty
-  serviceHistory Boolean? // True if Full Service History
-  wheelSize     Int?     // e.g. 19 inch
-  plateNumber   String?  // e.g. "P" or "W"
+  
+  warranty      Boolean?  // Under Warranty
+  serviceHistory Boolean? // Full Service History
+  prevOwners    Int?      // Number of owners
+  wheelSize     Int?      // Inch
+  plateNumber   String?   // Masked plate
 
   userId        String
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   favorites     Favorite[]
 
+  // Indexes for Performance
   @@index([type, status, published]) 
   @@index([price])
   @@index([state])
   @@index([brand])
+  @@index([createdAt])
+}
+
+// 6. NEWS ARTICLE MODEL
+model NewsArticle {
+  id        String   @id @default(uuid())
+  title     String
+  summary   String
+  content   String 
+  category  String   
+  imageUrl  String
+  createdAt DateTime @default(now())
+
   @@index([createdAt])
 }
