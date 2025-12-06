@@ -37,6 +37,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     const whatsappUrl = agentPhone ? `https://wa.me/${agentPhone}?text=Hi ${listing.user.name}, I'm interested in ${listing.title} (VEXA Ref: ${listing.id.substring(0,6)}).` : '#';
 
     const isVehicle = listing.type === 'VEHICLE';
+    const isRent = listing.listingCategory === 'RENT'; // Check if it's for Rent
 
     return (
         <div className={`min-h-screen bg-[#050505] text-white ${sansFont.className} pb-32 md:pb-0`}>
@@ -67,8 +68,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                         <div className="border-b border-white/10 pb-8">
                             <div className="flex flex-wrap gap-2 mb-4">
                                 <span className="bg-blue-600 text-white px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest">{listing.type}</span>
-                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${listing.listingCategory === 'RENT' ? 'bg-purple-600' : 'bg-emerald-600'}`}>{listing.listingCategory || 'SALE'}</span>
-                                {/* CONDITION: Only for Vehicles */}
+                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${isRent ? 'bg-purple-600' : 'bg-emerald-600'}`}>{listing.listingCategory || 'SALE'}</span>
                                 {isVehicle && listing.condition && <span className="border border-white/20 text-gray-400 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest">{listing.condition}</span>}
                                 {listing.negotiable && <span className="bg-green-900/30 text-green-400 border border-green-500/30 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-widest">Negotiable</span>}
                             </div>
@@ -84,7 +84,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                                 <p className="text-gray-400 flex items-center gap-2 text-sm md:text-base">
                                     <MapPin size={16} className="text-blue-500"/> {listing.area}, {listing.state}
                                 </p>
-                                <p className={`text-3xl md:text-4xl font-bold text-blue-400 ${serifFont.className}`}>{price}</p>
+                                <p className={`text-3xl md:text-4xl font-bold text-blue-400 ${serifFont.className}`}>{price} {isRent && <span className="text-lg text-gray-500">/ mo</span>}</p>
                             </div>
                         </div>
 
@@ -102,7 +102,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                                 // VEHICLE HIGHLIGHTS
                                 <>
                                     <HighlightBox icon={Calendar} label="Year" value={listing.year} />
-                                    {/* Removed toLocaleString() for mileage string compatibility */}
                                     <HighlightBox icon={Gauge} label="Mileage" value={listing.mileage ? `${listing.mileage} km` : null} />
                                     <HighlightBox icon={Car} label="Body" value={listing.bodyType} />
                                     <HighlightBox icon={Fuel} label="Fuel" value={listing.fuelType} />
@@ -178,12 +177,19 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                                 </div>
                             </section>
                         )}
+
+                        {/* --- MOBILE/TABLET LOAN CALCULATOR (Hidden for RENT) --- */}
+                        {!isRent && (
+                            <div className="lg:hidden mt-8">
+                                <LoanCalculator price={listing.price} type={listing.type as any} />
+                            </div>
+                        )}
+
                     </div>
 
-                    {/* RIGHT SIDEBAR (Desktop) */}
+                    {/* RIGHT SIDEBAR (Desktop Only) */}
                     <div className="hidden lg:block lg:col-span-4 relative">
                         <div className="sticky top-28 space-y-6">
-                            
                             {/* AGENT CARD */}
                             <div className="bg-neutral-900/80 backdrop-blur border border-white/10 p-6 rounded-3xl shadow-xl relative overflow-hidden group">
                                 <div className="absolute -top-20 -right-20 w-64 h-64 bg-blue-600/10 blur-[80px] rounded-full group-hover:bg-blue-600/20 transition-all duration-1000"></div>
@@ -205,7 +211,11 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
                                     <div className="w-full"><ContactButtons phone={listing.user.phoneNumber || ''} listingId={listing.id} whatsappUrl={whatsappUrl}/></div>
                                 </div>
                             </div>
-                            <LoanCalculator price={listing.price} type={listing.type as any} />
+                            
+                            {/* Desktop Loan Calculator (Hidden for RENT) */}
+                            {!isRent && (
+                                <LoanCalculator price={listing.price} type={listing.type as any} />
+                            )}
                         </div>
                     </div>
                 </div>
@@ -222,7 +232,6 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
     );
 }
 
-// Highlight Box (Top Row)
 function HighlightBox({ label, value, icon: Icon }: { label: string, value: any, icon: any }) {
     if (!value) return null;
     return (
@@ -234,7 +243,6 @@ function HighlightBox({ label, value, icon: Icon }: { label: string, value: any,
     );
 }
 
-// Spec Row (Grid Item)
 function SpecRow({ label, value }: { label: string, value: any }) {
     if (!value) return null;
     return (
