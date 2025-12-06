@@ -2,7 +2,7 @@
 
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/prisma";
-// Removed revalidatePath import as it cannot be used during render
+import { revalidatePath } from "next/cache";
 import { createClient } from '@supabase/supabase-js';
 
 // 1. Initialize Supabase (for storing generated images)
@@ -76,6 +76,7 @@ export async function checkAndGenerateNews() {
     today.setHours(0, 0, 0, 0);
 
     // 1. AUTO-FIX: Check if the latest article has a broken link OR is using a Fallback
+    // (RESTORED: Detailed checks for old broken links)
     const latest = await prisma.newsArticle.findFirst({ orderBy: { createdAt: 'desc' } });
     
     if (latest && (
@@ -96,7 +97,8 @@ export async function checkAndGenerateNews() {
                 where: { id: latest.id },
                 data: { imageUrl: newImage }
             });
-            // FIX: Removed revalidatePath here to prevent render error
+            // Note: No revalidatePath here to prevent render errors
+            console.log("Image upgraded successfully.");
             return;
         } else {
              console.log("AI still unavailable. Keeping fallback.");
@@ -154,9 +156,8 @@ export async function checkAndGenerateNews() {
         imageUrl: finalImageUrl, 
       }
     });
-
-    // FIX: Removed revalidatePath('/') and revalidatePath('/news')
-    // This prevents the "Route / used revalidatePath during render" error.
+    
+    console.log("News created successfully.");
     
   } catch (error) {
     console.error("News Gen Error:", error);
@@ -179,4 +180,24 @@ export async function getAllNews() {
 
 export async function getArticle(id: string) {
   return await prisma.newsArticle.findUnique({ where: { id } });
+}
+
+// --- NEW: MANUAL IMAGE UPDATE (For Admin Button) ---
+export async function updateNewsImage(articleId: string, imageUrl: string) {
+  try {
+    await prisma.newsArticle.update({
+        where: { id: articleId },
+        data: { imageUrl }
+    });
+    
+    // It IS safe to use revalidatePath here because this is called by a Client interaction (Button Click)
+    revalidatePath(`/news/${articleId}`);
+    revalidatePath('/news');
+    revalidatePath('/');
+    
+    return { success: true };
+  } catch (error) {
+    console.error("Update Image Error:", error);
+    return { success: false, error: "Failed to update image" };
+  }
 }

@@ -8,7 +8,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase Client for Uploads
+// Initialize Supabase Client
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -27,50 +27,63 @@ export default function SettingsPage() {
     profileImage: ''
   });
 
+  // 1. Load User Data
   useEffect(() => {
     getUserProfile().then((user) => {
-      setFormData({
-        phoneNumber: user.phoneNumber || '',
-        bio: user.bio || '',
-        website: user.website || '',
-        profileImage: user.profileImage || ''
-      });
+      if (user) {
+        setFormData({
+          phoneNumber: user.phoneNumber || '',
+          bio: user.bio || '',
+          website: user.website || '',
+          profileImage: user.profileImage || ''
+        });
+      }
       setLoading(false);
     });
   }, []);
 
+  // 2. Handle Image Upload
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) return;
     
     setUploading(true);
     const file = e.target.files[0];
-    const fileName = `avatar-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    
+    // FIX: Preserve file extension (e.g., .jpg)
+    const fileExt = file.name.split('.').pop();
+    const fileName = `avatar-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
 
     try {
         const { error } = await supabase.storage.from('vexa-images').upload(fileName, file);
         if (error) throw error;
         
         const { data } = supabase.storage.from('vexa-images').getPublicUrl(fileName);
+        
+        // Update local state immediately to show preview
         setFormData(prev => ({ ...prev, profileImage: data.publicUrl }));
     } catch (error) {
         console.error("Upload failed", error);
-        alert("Failed to upload image");
+        alert("Failed to upload image. Please try again.");
     } finally {
         setUploading(false);
     }
   };
 
+  // 3. Submit Profile Update
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
     
     try {
-        const form = new FormData(e.target as HTMLFormElement);
+        const form = new FormData();
+        // Append fields manually to ensure control
+        form.append('phoneNumber', formData.phoneNumber);
+        form.append('bio', formData.bio);
+        form.append('website', formData.website);
         form.append('profileImage', formData.profileImage);
         
         await updateProfile(form);
         alert("Profile Updated Successfully!");
-        router.push('/'); 
         router.refresh();
     } catch (error) {
         console.error(error);
@@ -87,7 +100,6 @@ export default function SettingsPage() {
   if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading...</div>;
 
   return (
-    // FIX: Added pt-28 to clear navbar
     <div className="min-h-screen bg-[#0a0a0a] text-white p-6 pt-28 flex justify-center items-center font-sans">
       <div className="max-w-2xl w-full bg-neutral-900 border border-neutral-800 rounded-3xl p-8 shadow-2xl">
         
@@ -98,7 +110,7 @@ export default function SettingsPage() {
 
         <form onSubmit={handleSubmit} className="space-y-8">
             
-            {/* --- PROFILE PHOTO UPLOAD SECTION --- */}
+            {/* --- PROFILE PHOTO UPLOAD --- */}
             <div className="flex flex-col items-center justify-center mb-8">
                 <div className="relative w-32 h-32 rounded-full overflow-hidden border-4 border-neutral-800 bg-neutral-800 group">
                     {formData.profileImage ? (
@@ -130,7 +142,7 @@ export default function SettingsPage() {
             {/* Phone Number */}
             <div>
                 <label className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2 block">WhatsApp Number (Start with 60)</label>
-                <div className="flex items-center bg-black border border-neutral-800 rounded-xl px-4 py-3">
+                <div className="flex items-center bg-black border border-neutral-800 rounded-xl px-4 py-3 focus-within:border-blue-500 transition-colors">
                     <Phone size={18} className="text-gray-500 mr-3"/>
                     <input 
                         name="phoneNumber" 
@@ -145,7 +157,7 @@ export default function SettingsPage() {
             {/* Website */}
             <div>
                 <label className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-2 block">Website / Portfolio</label>
-                <div className="flex items-center bg-black border border-neutral-800 rounded-xl px-4 py-3">
+                <div className="flex items-center bg-black border border-neutral-800 rounded-xl px-4 py-3 focus-within:border-blue-500 transition-colors">
                     <Globe size={18} className="text-gray-500 mr-3"/>
                     <input 
                         name="website" 
@@ -165,11 +177,11 @@ export default function SettingsPage() {
                     value={formData.bio} 
                     onChange={handleChange} 
                     placeholder="Tell buyers about your experience, area of focus, etc..." 
-                    className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 outline-none text-white h-32 resize-none leading-relaxed"
+                    className="w-full bg-black border border-neutral-800 rounded-xl px-4 py-3 outline-none text-white h-32 resize-none leading-relaxed focus:border-blue-500 transition-colors"
                 />
             </div>
 
-            <button type="submit" disabled={saving || uploading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all">
+            <button type="submit" disabled={saving || uploading} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50">
                 {saving ? <Loader2 className="animate-spin"/> : <Save size={20}/>}
                 {saving ? "Saving..." : "Save Profile"}
             </button>
