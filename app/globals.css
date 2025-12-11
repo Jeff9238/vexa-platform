@@ -1,0 +1,43 @@
+@import "tailwindcss";
+
+@theme {
+  /* DARK OCEAN PALETTE (From your image) */
+  --color-vexa-blue: #0A2438;       /* Deepest Navy */
+  --color-vexa-blue-light: #1A6A7F; /* Teal Blue */
+  --color-vexa-blue-lighter: #6F9DB6; /* Muted Blue */
+  --color-vexa-blue-dark: #051224;  /* Almost Black */
+  
+  --color-vexa-sky: #A8DCF1;        /* Light Sky Blue */
+  
+  /* ACTION COLORS (Kept Orange for High Contrast/Sales) */
+  --color-vexa-orange: #FF6B00;
+  --color-vexa-orange-light: #FF8C38;
+  --color-vexa-orange-dark: #CC5500;
+
+  /* NEUTRALS */
+  --color-vexa-silver: #D4DEE3;     /* Off White from image */
+  --color-vexa-silver-dark: #5A6B79; /* Slate Grey from image */
+  --color-vexa-gold: #D4AF37;       /* Premium Status */
+}
+
+:root {
+  --foreground-rgb: 10, 36, 56; /* #0A2438 text */
+  --background-start-rgb: 248, 250, 252;
+  --background-end-rgb: 255, 255, 255;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(to bottom, transparent, rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #5A6B79; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #1A6A7F; }
+
+/* Hide scrollbar utility */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
