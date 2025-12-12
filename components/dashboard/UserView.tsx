@@ -24,6 +24,7 @@ export default function UserView({ profile }: UserViewProps) {
   const [proLoading, setProLoading] = useState(false); 
   const [db, setDb] = useState<any>(null);
   const [auth, setAuth] = useState<any>(null);
+  const [isDbReady, setIsDbReady] = useState(false); // Restored missing state
   
   // Real User State
   const [currentUser, setCurrentUser] = useState<any>(null); // Firebase Auth User
@@ -92,6 +93,7 @@ export default function UserView({ profile }: UserViewProps) {
       setDb(dbInstance);
       setAuth(authInstance);
       window.firestoreDb = dbInstance;
+      setIsDbReady(true); // Mark DB as ready
 
       // 3. Listen for Auth Changes
       authInstance.onAuthStateChanged(async (user: any) => {
@@ -314,7 +316,7 @@ export default function UserView({ profile }: UserViewProps) {
                    {loading ? <Loader2 size={24} className="animate-spin" /> : <Briefcase size={24} />}
                  </div>
                  <div className="flex-1">
-                   <h3 className="font-bold text-vexa-blue">{agentRequestStatus === 'pending' ? 'Agent Request Pending' : 'Become an Agent'}</h3>
+                   <h3 className="font-bold text-vexa-blue">{agentRequestStatus === 'pending' ? 'Agent Request Pending' : !isDbReady ? 'Loading System...' : 'Become an Agent'}</h3>
                    <p className="text-xs text-gray-400">{agentRequestStatus === 'pending' ? 'Waiting for admin approval...' : 'Unlock listing features'}</p>
                  </div>
                </button>
