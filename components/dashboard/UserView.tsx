@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Heart, Clock, Settings, Bell, Briefcase, Loader2, Hammer, ArrowRight, LogIn, UserPlus, LogOut } from "lucide-react";
+import { Heart, Clock, Settings, Bell, Briefcase, Loader2, Hammer, ArrowRight, LogIn, UserPlus, LogOut, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -106,26 +106,38 @@ export default function UserView({ profile }: UserViewProps) {
 
               // Fetch User Data from Firestore
               const docRef = dbInstance.collection("users").doc(user.uid);
-              const docSnap = await docRef.get();
-
-              if (docSnap.exists) {
-                  setLocalProfile(docSnap.data());
-              } else {
-                  // Create basic profile if new
-                  const newProfile = {
-                      name: user.email?.split('@')[0] || 'User',
-                      email: user.email,
-                      role: 'user',
-                      createdAt: new Date()
-                  };
-                  await docRef.set(newProfile);
-                  setLocalProfile(newProfile);
-              }
               
-              // Real-time listener for profile updates (e.g. Admin approves)
-              docRef.onSnapshot((snap: any) => {
-                  if (snap.exists) setLocalProfile(snap.data());
-              });
+              try {
+                  const docSnap = await docRef.get();
+
+                  if (docSnap.exists) {
+                      setLocalProfile(docSnap.data());
+                  } else {
+                      // Create basic profile if new
+                      const newProfile = {
+                          name: user.email?.split('@')[0] || 'User',
+                          email: user.email,
+                          role: 'user',
+                          createdAt: new Date()
+                      };
+                      
+                      try {
+                          await docRef.set(newProfile);
+                          console.log("Profile created in Firestore");
+                      } catch (writeError) {
+                          console.error("Firestore WRITE Failed (Check Security Rules):", writeError);
+                          // Proceed with memory-only profile so UI doesn't break
+                      }
+                      setLocalProfile(newProfile);
+                  }
+                  
+                  // Real-time listener for profile updates (e.g. Admin approves)
+                  docRef.onSnapshot((snap: any) => {
+                      if (snap.exists) setLocalProfile(snap.data());
+                  });
+              } catch (err) {
+                  console.error("Firestore Read Failed:", err);
+              }
 
           } else {
               console.log("No User Logged In");
@@ -177,28 +189,37 @@ export default function UserView({ profile }: UserViewProps) {
 
   // --- ROLE ACTIONS ---
   const handleRequestAgent = async () => {
-    if (!db || !currentUser) return;
+    if (!db || !currentUser) { alert("System connecting... please wait"); return; }
     try {
       setLoading(true);
       await db.collection("users").doc(currentUser.uid).set({
         agentRequest: { status: 'pending', requestedAt: new Date() },
-        email: currentUser.email
+        email: currentUser.email,
+        // Ensure name exists in DB
+        name: localProfile?.name || currentUser.email?.split('@')[0]
       }, { merge: true });
       alert("Agent request sent successfully!");
-    } catch (error) { alert("Failed to send request."); } 
+    } catch (error) { 
+        console.error(error);
+        alert("Failed to send request. Check console for permission errors."); 
+    } 
     finally { setLoading(false); }
   };
 
   const handleRequestPro = async () => {
-    if (!db || !currentUser) return;
+    if (!db || !currentUser) { alert("System connecting... please wait"); return; }
     try {
       setProLoading(true);
       await db.collection("users").doc(currentUser.uid).set({
         proRequest: { status: 'pending', requestedAt: new Date(), proType: 'General Service Provider' },
-        email: currentUser.email
+        email: currentUser.email,
+        name: localProfile?.name || currentUser.email?.split('@')[0]
       }, { merge: true });
       alert("Pro request sent successfully!");
-    } catch (error) { alert("Failed to send request."); } 
+    } catch (error) { 
+        console.error(error);
+        alert("Failed to send request. Check console for permission errors."); 
+    } 
     finally { setProLoading(false); }
   };
 
@@ -245,8 +266,8 @@ export default function UserView({ profile }: UserViewProps) {
                       </div>
 
                       {authError && (
-                          <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg">
-                              {authError}
+                          <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
+                              <AlertCircle size={16} /> {authError}
                           </div>
                       )}
 
