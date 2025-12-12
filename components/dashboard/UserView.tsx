@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Heart, Clock, Settings, Bell, Briefcase, Loader2, Hammer, ArrowRight, LogIn, UserPlus, LogOut, AlertCircle } from "lucide-react";
+import { Heart, Clock, Settings, Bell, Briefcase, Loader2, Hammer, ArrowRight, LogIn, UserPlus, LogOut, AlertCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -20,17 +20,16 @@ declare global {
 export default function UserView({ profile }: UserViewProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [authLoading, setAuthLoading] = useState(true); // Initial auth check
+  const [authLoading, setAuthLoading] = useState(true); 
   const [proLoading, setProLoading] = useState(false); 
   const [db, setDb] = useState<any>(null);
   const [auth, setAuth] = useState<any>(null);
-  const [isDbReady, setIsDbReady] = useState(false); // Restored missing state
+  const [isDbReady, setIsDbReady] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
   
-  // Real User State
-  const [currentUser, setCurrentUser] = useState<any>(null); // Firebase Auth User
-  const [localProfile, setLocalProfile] = useState<any>(null); // Firestore User Data
+  const [currentUser, setCurrentUser] = useState<any>(null); 
+  const [localProfile, setLocalProfile] = useState<any>(null);
 
-  // Login Form State
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
@@ -46,44 +45,52 @@ export default function UserView({ profile }: UserViewProps) {
   // --- 1. INITIALIZE FIREBASE & AUTH ---
   const initializeFirebase = useCallback(async () => {
     try {
-      // 1. Load Scripts if not present
+      setConnectionError(false);
+
+      // A. Load Scripts if missing
       if (!(window as any).firebase) {
           await new Promise((resolve, reject) => {
               const appScript = document.createElement('script');
               appScript.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js";
               appScript.onload = resolve;
-              appScript.onerror = reject;
+              appScript.onerror = () => reject(new Error("Failed to load Firebase App"));
               document.head.appendChild(appScript);
           });
           
           await Promise.all([
-              new Promise(resolve => {
+              new Promise((resolve, reject) => {
                   const s = document.createElement('script');
                   s.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js";
                   s.onload = resolve;
+                  s.onerror = () => reject(new Error("Failed to load Firestore"));
                   document.head.appendChild(s);
               }),
-              new Promise(resolve => {
+              new Promise((resolve, reject) => {
                   const s = document.createElement('script');
                   s.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js";
                   s.onload = resolve;
+                  s.onerror = () => reject(new Error("Failed to load Auth"));
                   document.head.appendChild(s);
               })
           ]);
       }
 
-      // 2. Initialize App
+      // B. Initialize App (Run this even if scripts were already present)
       const firebase = (window as any).firebase;
+      
+      if (!firebase) throw new Error("Firebase object not found in window");
+
+      const firebaseConfig = {
+          apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
+          authDomain: "vexa-platform.firebaseapp.com",
+          projectId: "vexa-platform",
+          storageBucket: "vexa-platform.firebasestorage.app",
+          messagingSenderId: "96646526352",
+          appId: "1:96646526352:web:140e50442fc5e66dca2f15",
+          measurementId: "G-C7MBKREZNG"
+      };
+
       if (!firebase.apps.length) {
-          const firebaseConfig = {
-              apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
-              authDomain: "vexa-platform.firebaseapp.com",
-              projectId: "vexa-platform",
-              storageBucket: "vexa-platform.firebasestorage.app",
-              messagingSenderId: "96646526352",
-              appId: "1:96646526352:web:140e50442fc5e66dca2f15",
-              measurementId: "G-C7MBKREZNG"
-          };
           firebase.initializeApp(firebaseConfig);
       }
 
@@ -93,54 +100,42 @@ export default function UserView({ profile }: UserViewProps) {
       setDb(dbInstance);
       setAuth(authInstance);
       window.firestoreDb = dbInstance;
-      setIsDbReady(true); // Mark DB as ready
+      setIsDbReady(true); 
 
-      // 3. Listen for Auth Changes
+      // C. Listen for Auth Changes
       authInstance.onAuthStateChanged(async (user: any) => {
           if (user) {
               console.log("User Logged In:", user.uid);
               setCurrentUser(user);
-              
-              // CRITICAL: Sync with localStorage so Agent/Pro dashboards work
               localStorage.setItem("vexa_active_user_id", user.uid);
 
-              // Fetch User Data from Firestore
               const docRef = dbInstance.collection("users").doc(user.uid);
               
               try {
                   const docSnap = await docRef.get();
-
                   if (docSnap.exists) {
                       setLocalProfile(docSnap.data());
                   } else {
-                      // Create basic profile if new
+                      // Create Profile if missing (Self-Repair)
                       const newProfile = {
                           name: user.email?.split('@')[0] || 'User',
                           email: user.email,
                           role: 'user',
                           createdAt: new Date()
                       };
-                      
-                      try {
-                          await docRef.set(newProfile);
-                          console.log("Profile created in Firestore");
-                      } catch (writeError) {
-                          console.error("Firestore WRITE Failed (Check Security Rules):", writeError);
-                          // Proceed with memory-only profile so UI doesn't break
-                      }
+                      await docRef.set(newProfile);
                       setLocalProfile(newProfile);
                   }
-                  
-                  // Real-time listener for profile updates (e.g. Admin approves)
+
+                  // Real-time listener
                   docRef.onSnapshot((snap: any) => {
                       if (snap.exists) setLocalProfile(snap.data());
                   });
               } catch (err) {
-                  console.error("Firestore Read Failed:", err);
+                  console.error("Firestore Error:", err);
+                  // Allow UI to load even if Firestore fails (Permission/Network)
               }
-
           } else {
-              console.log("No User Logged In");
               setCurrentUser(null);
               setLocalProfile(null);
               localStorage.removeItem("vexa_active_user_id");
@@ -149,7 +144,8 @@ export default function UserView({ profile }: UserViewProps) {
       });
 
     } catch (e) {
-      console.error("Firebase Error:", e);
+      console.error("Firebase Init Error:", e);
+      setConnectionError(true);
       setAuthLoading(false);
     }
   }, []);
@@ -158,14 +154,12 @@ export default function UserView({ profile }: UserViewProps) {
     initializeFirebase();
   }, [initializeFirebase]);
 
-  // --- AUTH ACTIONS ---
-
+  // --- ACTIONS ---
   const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
       setAuthError("");
       try {
           await auth.signInWithEmailAndPassword(email, password);
-          // onAuthStateChanged will handle the rest
       } catch (err: any) {
           setAuthError(err.message);
       }
@@ -176,7 +170,6 @@ export default function UserView({ profile }: UserViewProps) {
       setAuthError("");
       try {
           await auth.createUserWithEmailAndPassword(email, password);
-          // onAuthStateChanged will handle profile creation
       } catch (err: any) {
           setAuthError(err.message);
       }
@@ -187,43 +180,41 @@ export default function UserView({ profile }: UserViewProps) {
       window.location.reload();
   };
 
-  // --- ROLE ACTIONS ---
   const handleRequestAgent = async () => {
-    if (!db || !currentUser) { alert("System connecting... please wait"); return; }
+    if (!db || !currentUser) { alert("System connecting..."); return; }
     try {
       setLoading(true);
       await db.collection("users").doc(currentUser.uid).set({
         agentRequest: { status: 'pending', requestedAt: new Date() },
         email: currentUser.email,
-        // Ensure name exists in DB
-        name: localProfile?.name || currentUser.email?.split('@')[0]
+        name: localProfile?.name || currentUser.email?.split('@')[0],
+        role: localProfile?.role || 'user'
       }, { merge: true });
       alert("Agent request sent successfully!");
     } catch (error) { 
         console.error(error);
-        alert("Failed to send request. Check console for permission errors."); 
+        alert("Request Failed. Check console."); 
     } 
     finally { setLoading(false); }
   };
 
   const handleRequestPro = async () => {
-    if (!db || !currentUser) { alert("System connecting... please wait"); return; }
+    if (!db || !currentUser) { alert("System connecting..."); return; }
     try {
       setProLoading(true);
       await db.collection("users").doc(currentUser.uid).set({
         proRequest: { status: 'pending', requestedAt: new Date(), proType: 'General Service Provider' },
         email: currentUser.email,
-        name: localProfile?.name || currentUser.email?.split('@')[0]
+        name: localProfile?.name || currentUser.email?.split('@')[0],
+        role: localProfile?.role || 'user'
       }, { merge: true });
       alert("Pro request sent successfully!");
     } catch (error) { 
         console.error(error);
-        alert("Failed to send request. Check console for permission errors."); 
+        alert("Request Failed. Check console."); 
     } 
     finally { setProLoading(false); }
   };
-
-  // --- RENDERING ---
 
   if (authLoading) {
       return (
@@ -233,7 +224,7 @@ export default function UserView({ profile }: UserViewProps) {
       );
   }
 
-  // 1. LOGIN / REGISTER SCREEN (If not logged in)
+  // 1. LOGIN / REGISTER SCREEN
   if (!currentUser) {
       return (
           <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -246,45 +237,21 @@ export default function UserView({ profile }: UserViewProps) {
                   <form onSubmit={isRegistering ? handleRegister : handleLogin} className="space-y-4">
                       <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
-                          <input 
-                              type="email" 
-                              required 
-                              className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-vexa-blue/20 focus:border-vexa-blue outline-none"
-                              value={email}
-                              onChange={e => setEmail(e.target.value)}
-                          />
+                          <input type="email" required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-vexa-blue/20 outline-none" value={email} onChange={e => setEmail(e.target.value)} />
                       </div>
                       <div>
                           <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
-                          <input 
-                              type="password" 
-                              required 
-                              className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-vexa-blue/20 focus:border-vexa-blue outline-none"
-                              value={password}
-                              onChange={e => setPassword(e.target.value)}
-                          />
+                          <input type="password" required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-vexa-blue/20 outline-none" value={password} onChange={e => setPassword(e.target.value)} />
                       </div>
-
-                      {authError && (
-                          <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
-                              <AlertCircle size={16} /> {authError}
-                          </div>
-                      )}
-
-                      <button 
-                          type="submit" 
-                          className="w-full bg-vexa-blue hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2"
-                      >
+                      {authError && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2"><AlertCircle size={16} /> {authError}</div>}
+                      <button type="submit" className="w-full bg-vexa-blue hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
                           {isRegistering ? <UserPlus size={18} /> : <LogIn size={18} />}
                           {isRegistering ? "Sign Up" : "Sign In"}
                       </button>
                   </form>
 
                   <div className="mt-6 text-center">
-                      <button 
-                          onClick={() => { setIsRegistering(!isRegistering); setAuthError(""); }}
-                          className="text-sm text-slate-500 hover:text-vexa-blue font-medium"
-                      >
+                      <button onClick={() => { setIsRegistering(!isRegistering); setAuthError(""); }} className="text-sm text-slate-500 hover:text-vexa-blue font-medium">
                           {isRegistering ? "Already have an account? Sign In" : "Don't have an account? Create one"}
                       </button>
                   </div>
@@ -293,7 +260,7 @@ export default function UserView({ profile }: UserViewProps) {
       );
   }
 
-  // 2. DASHBOARD (If logged in)
+  // 2. DASHBOARD
   return (
     <div className="min-h-screen bg-slate-50 pb-24 pt-20 container mx-auto px-4">
        <div className="mb-8 flex justify-between items-end">
@@ -301,7 +268,7 @@ export default function UserView({ profile }: UserViewProps) {
              <h1 className="text-2xl font-bold text-vexa-blue">My Account</h1>
              <p className="text-gray-500">Welcome, {localProfile?.name || currentUser.email}</p>
              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs text-gray-300 font-mono hidden md:inline">ID: {currentUser.uid}</span>
+                <span className="text-xs text-gray-300 font-mono hidden md:inline">ID: {currentUser.uid.substring(0, 8)}...</span>
                 {isAgent && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-bold border border-emerald-200">AGENT</span>}
                 {isPro && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold border border-purple-200">PRO</span>}
                 {isAdmin && <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold border border-red-200">ADMIN</span>}
@@ -311,6 +278,13 @@ export default function UserView({ profile }: UserViewProps) {
              <LogOut size={16} /> <span className="hidden md:inline">Sign Out</span>
          </button>
        </div>
+
+       {connectionError && (
+           <div className="bg-red-50 border border-red-100 text-red-700 p-4 rounded-xl mb-6 flex items-center justify-between">
+               <span className="flex items-center gap-2"><AlertCircle size={20}/> Connection lost. Features may be disabled.</span>
+               <button onClick={() => window.location.reload()} className="flex items-center gap-1 font-bold text-sm bg-white px-3 py-1 rounded shadow-sm hover:bg-red-50"><RefreshCw size={14}/> Retry</button>
+           </div>
+       )}
 
        <div className="space-y-4">
          
@@ -368,7 +342,7 @@ export default function UserView({ profile }: UserViewProps) {
                    {proLoading ? <Loader2 size={24} className="animate-spin" /> : <Hammer size={24} />}
                  </div>
                  <div className="flex-1">
-                   <h3 className="font-bold text-purple-700">{proRequestStatus === 'pending' ? 'Pro Request Pending' : 'Become a Service Pro'}</h3>
+                   <h3 className="font-bold text-purple-700">{proRequestStatus === 'pending' ? 'Pro Request Pending' : !isDbReady ? 'Loading System...' : 'Become a Service Pro'}</h3>
                    <p className="text-xs text-gray-400">{proRequestStatus === 'pending' ? 'Waiting for admin approval...' : 'Register as a Renovator or Plumber'}</p>
                  </div>
                </button>
