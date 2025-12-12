@@ -9,11 +9,10 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@clerk/nextjs": "^6.36.2",
-    "@supabase/supabase-js": "^2.87.1",
     "autoprefixer": "^10.4.22",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
+    "firebase": "^12.6.0",
     "framer-motion": "^12.23.25",
     "lucide-react": "^0.556.0",
     "next": "16.0.8",
