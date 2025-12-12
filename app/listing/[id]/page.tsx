@@ -9,26 +9,28 @@ import {
   MessageCircle, 
   Share2, 
   Heart, 
-  ArrowLeft,
-  Loader2,
-  Home,
-  Car,
-  Bed,
-  Bath,
-  Maximize,
-  Calendar,
-  Gauge,
-  Zap,
-  Users,
-  CheckCircle2,
-  Building,
-  Fuel,
-  Calculator,
-  X,
-  ChevronLeft,
-  ChevronRight,
-  Navigation,
-  Clock 
+  ArrowLeft, 
+  Loader2, 
+  Home, 
+  Car, 
+  Bed, 
+  Bath, 
+  Maximize, 
+  Calendar, 
+  Gauge, 
+  Zap, 
+  Users, 
+  CheckCircle2, 
+  Building, 
+  Fuel, 
+  Calculator, 
+  X, 
+  ChevronLeft, 
+  ChevronRight, 
+  Navigation, 
+  Clock,
+  TrendingUp,
+  BarChart3
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -45,7 +47,13 @@ export default function ListingDetail() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [listing, setListing] = useState<any>(null);
+  const [db, setDb] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   
+  // Interactive State
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [favLoading, setFavLoading] = useState(false);
+
   // Gallery State
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -57,11 +65,19 @@ export default function ListingDetail() {
   const [calcTenure, setCalcTenure] = useState(9); 
   const [monthlyPayment, setMonthlyPayment] = useState(0);
 
+  // Market Analysis State
+  const [marketStats, setMarketStats] = useState<{avg: number, count: number, min: number, max: number} | null>(null);
+
   // Initialize Firebase 
   const initializeFirebase = useCallback(async () => {
     try {
+        // Get User ID for Favorites/History
+        const storedUserId = localStorage.getItem("vexa_active_user_id");
+        setUserId(storedUserId);
+
         if (typeof window.firestoreDb !== 'undefined' && window.firestoreDb) {
-            fetchListing(window.firestoreDb);
+            setDb(window.firestoreDb);
+            fetchListing(window.firestoreDb, storedUserId);
             return;
         }
         const appScript = document.createElement('script');
@@ -83,7 +99,8 @@ export default function ListingDetail() {
                 if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
                 const dbInstance = firebase.firestore();
                 window.firestoreDb = dbInstance;
-                fetchListing(dbInstance);
+                setDb(dbInstance);
+                fetchListing(dbInstance, storedUserId);
             };
             document.head.appendChild(firestoreScript);
         };
@@ -91,20 +108,22 @@ export default function ListingDetail() {
     } catch (e) { console.error(e); }
   }, []);
 
-  const fetchListing = async (db: any) => {
+  const fetchListing = async (database: any, uid: string | null) => {
       if (!id) return;
       try {
-          const doc = await db.collection("listings").doc(id).get();
+          const doc = await database.collection("listings").doc(id).get();
           if (doc.exists) {
               const data = { id: doc.id, ...doc.data() };
               setListing(data);
               
+              // Sort Images
               let sortedImages = data.images || [];
               if (data.coverImage) {
                   sortedImages = [data.coverImage, ...sortedImages.filter((img: string) => img !== data.coverImage)];
               }
               setImages(sortedImages);
 
+              // Set Calculator Defaults
               if (data.type === 'property') {
                   setCalcInterest(4.2); 
                   setCalcTenure(30);
@@ -113,9 +132,57 @@ export default function ListingDetail() {
                   setCalcTenure(5); 
               }
 
-              db.collection("listings").doc(id).update({
+              // Increment View Count
+              database.collection("listings").doc(id).update({
                   views: (window as any).firebase.firestore.FieldValue.increment(1)
               });
+
+              // --- MARKET ANALYSIS (VERSUS) ---
+              // Query similar items to calculate averages
+              const compareField = data.type === 'property' ? 'projectName' : 'model';
+              const compareValue = data[compareField];
+
+              if (compareValue) {
+                  const similarSnap = await database.collection("listings")
+                    .where(compareField, "==", compareValue)
+                    .where("status", "==", "active")
+                    .limit(20) // Limit sample size
+                    .get();
+
+                  const prices = similarSnap.docs
+                    .map((d: any) => Number(d.data().price))
+                    .filter((p: number) => !isNaN(p));
+                  
+                  if (prices.length > 0) {
+                      const total = prices.reduce((a: number, b: number) => a + b, 0);
+                      setMarketStats({
+                          avg: total / prices.length,
+                          count: prices.length,
+                          min: Math.min(...prices),
+                          max: Math.max(...prices)
+                      });
+                  }
+              }
+
+              // --- HISTORY & FAVORITES CHECK ---
+              if (uid) {
+                  // 1. Check if Favorited
+                  const favDoc = await database.collection("users").doc(uid).collection("favorites").doc(id).get();
+                  if (favDoc.exists) setIsFavorited(true);
+
+                  // 2. Add to History
+                  await database.collection("users").doc(uid).collection("history").doc(id as string).set({
+                      id: data.id,
+                      title: data.title,
+                      price: data.price,
+                      coverImage: data.coverImage || '',
+                      type: data.type,
+                      area: data.area,
+                      state: data.state,
+                      viewedAt: new Date()
+                  });
+              }
+
           } else {
               alert("Listing not found!");
               router.push('/');
@@ -128,6 +195,62 @@ export default function ListingDetail() {
     if (typeof window !== 'undefined') initializeFirebase();
   }, [initializeFirebase]);
 
+  // Handle Share
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: listing.title,
+          text: `Check out this listing on VEXA: ${listing.title}`,
+          url: window.location.href,
+        });
+      } catch (error) {
+        console.log('Error sharing:', error);
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(window.location.href);
+        alert("Link copied to clipboard!");
+      } catch (err) {
+        console.error('Failed to copy: ', err);
+      }
+    }
+  };
+
+  // Handle Favorites Toggle
+  const handleToggleFavorite = async () => {
+      if (!userId) return alert("Please log in (via Dashboard) to save favorites.");
+      if (!db || !listing) return;
+
+      setFavLoading(true);
+      const favRef = db.collection("users").doc(userId).collection("favorites").doc(listing.id);
+
+      try {
+          if (isFavorited) {
+              await favRef.delete();
+              setIsFavorited(false);
+          } else {
+              await favRef.set({
+                  id: listing.id,
+                  title: listing.title,
+                  price: listing.price,
+                  coverImage: listing.coverImage || '',
+                  type: listing.type,
+                  area: listing.area,
+                  state: listing.state,
+                  savedAt: new Date()
+              });
+              setIsFavorited(true);
+          }
+      } catch (error) {
+          console.error("Fav Error", error);
+          alert("Failed to update favorites.");
+      } finally {
+          setFavLoading(false);
+      }
+  };
+
+  // Calculator Effect
   useEffect(() => {
       if (!listing) return;
       const principal = Number(listing.price) - (Number(listing.price) * (calcDownpayment / 100));
@@ -162,11 +285,26 @@ export default function ListingDetail() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-vexa-blue" size={40} /></div>;
   if (!listing) return null;
+  
+  const whatsappNumber = listing.agentPhone ? listing.agentPhone.replace(/\D/g, '') : '60123456789'; 
+  const whatsappLink = `https://wa.me/${whatsappNumber}?text=Hi, I'm interested in your listing: ${listing.title}`;
 
   const isProperty = listing.type === 'property';
 
+  // Helper for Market Analysis Color
+  const getPriceColor = (price: number, avg: number) => {
+      if (price < avg * 0.95) return "text-emerald-600"; // 5% cheaper
+      if (price > avg * 1.05) return "text-red-600"; // 5% expensive
+      return "text-blue-600"; // Fair
+  };
+
+  const getPriceLabel = (price: number, avg: number) => {
+      if (price < avg * 0.95) return "Good Deal";
+      if (price > avg * 1.05) return "Premium Price";
+      return "Fair Market Value";
+  };
+
   return (
-    // Increased bottom padding to pb-20 to allow scrolling past the lifted floating bar
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-12 font-sans">
         
         {/* Navigation */}
@@ -176,8 +314,21 @@ export default function ListingDetail() {
                     <ArrowLeft size={20} /> Back
                 </button>
                 <div className="flex gap-2">
-                    <button className="p-2 rounded-full hover:bg-slate-100 text-slate-500"><Share2 size={20} /></button>
-                    <button className="p-2 rounded-full hover:bg-slate-100 text-slate-500"><Heart size={20} /></button>
+                    <button 
+                        onClick={handleShare}
+                        className="p-2 rounded-full hover:bg-slate-100 text-slate-500"
+                        title="Share"
+                    >
+                        <Share2 size={20} />
+                    </button>
+                    <button 
+                        onClick={handleToggleFavorite}
+                        disabled={favLoading}
+                        className={`p-2 rounded-full transition-colors ${isFavorited ? 'bg-red-50 text-red-500' : 'hover:bg-slate-100 text-slate-500'}`}
+                        title={isFavorited ? "Remove from Favorites" : "Add to Favorites"}
+                    >
+                        {favLoading ? <Loader2 size={20} className="animate-spin" /> : <Heart size={20} fill={isFavorited ? "currentColor" : "none"} />}
+                    </button>
                 </div>
             </div>
         </div>
@@ -297,78 +448,69 @@ export default function ListingDetail() {
                             )}
                         </div>
 
-                        {/* Full Details Table */}
-                        <div className="mb-8">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4">Details</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                                {isProperty ? (
-                                    <>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Project Name</span>
-                                            <span className="font-medium text-slate-800">{listing.projectName || '-'}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Developer</span>
-                                            <span className="font-medium text-slate-800">{listing.developer || '-'}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Tenure</span>
-                                            <span className="font-medium text-slate-800">{listing.tenure}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Furnishing</span>
-                                            <span className="font-medium text-slate-800">{listing.furnishing}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Floor Level</span>
-                                            <span className="font-medium text-slate-800">{listing.floorLevel || '-'}</span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Make</span>
-                                            <span className="font-medium text-slate-800">{listing.make}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Model</span>
-                                            <span className="font-medium text-slate-800">{listing.model}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Body Type</span>
-                                            <span className="font-medium text-slate-800">{listing.bodyType}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Color</span>
-                                            <span className="font-medium text-slate-800">{listing.color}</span>
-                                        </div>
-                                        <div className="flex justify-between py-2 border-b border-slate-100">
-                                            <span className="text-slate-500">Fuel Type</span>
-                                            <span className="font-medium text-slate-800">{listing.fuel}</span>
-                                        </div>
-                                    </>
-                                )}
+                        {/* MARKET ANALYSIS (VERSUS) */}
+                        {marketStats && marketStats.count > 1 && (
+                            <div className="mb-8 p-5 bg-gradient-to-r from-slate-50 to-white rounded-2xl border border-slate-200">
+                                <h3 className="font-bold text-slate-800 mb-2 flex items-center gap-2">
+                                    <BarChart3 size={20} className="text-vexa-blue" />
+                                    Market Analysis
+                                </h3>
+                                <p className="text-sm text-slate-500 mb-4">
+                                    Comparing against {marketStats.count} other similar listings for {isProperty ? listing.projectName : listing.model}.
+                                </p>
+                                
+                                <div className="space-y-2">
+                                    <div className="flex justify-between text-sm font-medium">
+                                        <span>This Price</span>
+                                        <span className={getPriceColor(Number(listing.price), marketStats.avg)}>
+                                            RM {Number(listing.price).toLocaleString()}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between text-sm text-slate-500">
+                                        <span>Market Average</span>
+                                        <span>RM {Math.round(marketStats.avg).toLocaleString()}</span>
+                                    </div>
+                                    
+                                    {/* Comparison Bar */}
+                                    <div className="h-4 bg-slate-200 rounded-full mt-2 relative overflow-hidden">
+                                        {/* Average Marker */}
+                                        <div 
+                                            className="absolute top-0 bottom-0 w-1 bg-slate-400 z-10" 
+                                            style={{ left: '50%' }}
+                                        ></div>
+                                        
+                                        {/* Current Listing Position */}
+                                        {(() => {
+                                            // Calculate percentage deviation: 50% is avg. 0% is min, 100% is max
+                                            const range = marketStats.max - marketStats.min;
+                                            const pos = range === 0 ? 50 : ((Number(listing.price) - marketStats.min) / range) * 100;
+                                            // Clamp between 10% and 90% for visuals
+                                            const clampedPos = Math.max(10, Math.min(90, pos));
+                                            
+                                            return (
+                                                <div 
+                                                    className={`absolute top-0 bottom-0 w-3 h-3 my-auto rounded-full shadow-md border-2 border-white ${getPriceColor(Number(listing.price), marketStats.avg).replace('text-', 'bg-')}`}
+                                                    style={{ left: `${clampedPos}%` }}
+                                                ></div>
+                                            );
+                                        })()}
+                                    </div>
+                                    <div className="flex justify-between text-[10px] text-slate-400 mt-1">
+                                        <span>Cheaper (RM {marketStats.min.toLocaleString()})</span>
+                                        <span>Expensive (RM {marketStats.max.toLocaleString()})</span>
+                                    </div>
+
+                                    <div className={`mt-3 text-center text-sm font-bold ${getPriceColor(Number(listing.price), marketStats.avg)}`}>
+                                        Verdict: {getPriceLabel(Number(listing.price), marketStats.avg)}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         <h3 className="text-lg font-bold text-slate-800 mb-3">Description</h3>
                         <p className="text-slate-600 leading-relaxed whitespace-pre-wrap mb-8">
                             {listing.description || "No description provided."}
                         </p>
-
-                        {/* Facilities */}
-                        {(listing.facilities && listing.facilities.length > 0) && (
-                            <div className="mb-8">
-                                <h3 className="text-lg font-bold text-slate-800 mb-4">Facilities & Features</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                                    {listing.facilities.map((item: string) => (
-                                        <div key={item} className="flex items-center gap-2 text-slate-600 text-sm">
-                                            <CheckCircle2 size={16} className="text-emerald-500" /> {item}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
 
                         {/* Location */}
                         <div className="mb-8">
@@ -388,22 +530,32 @@ export default function ListingDetail() {
                                     </div>
                                 </div>
                             </div>
-                            
-                            <div className="mt-4 grid grid-cols-2 gap-4">
-                                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                    <p className="text-xs text-slate-400 font-bold uppercase mb-2">Nearby Amenities</p>
-                                    <ul className="text-sm text-slate-600 space-y-1">
-                                        <li>• 2.5km to City Center</li>
-                                        <li>• 1.0km to Nearest MRT</li>
-                                        <li>• 500m to Shopping Mall</li>
-                                    </ul>
+                        </div>
+
+                        {/* MOBILE CALCULATOR (Visible on Mobile Only) */}
+                        <div className="md:hidden bg-slate-50 p-6 rounded-2xl border border-slate-200 mb-8">
+                            <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
+                                <Calculator size={20} className="text-vexa-blue" />
+                                {isProperty ? "Mortgage Calculator" : "Loan Calculator"}
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-slate-500">Downpayment (%)</span>
+                                        <span className="font-bold text-slate-700">{calcDownpayment}%</span>
+                                    </div>
+                                    <input type="range" min="0" max="50" step="5" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-vexa-blue" value={calcDownpayment} onChange={(e) => setCalcDownpayment(Number(e.target.value))} />
                                 </div>
-                                <div className="p-3 bg-slate-50 rounded-lg border border-slate-100">
-                                    <p className="text-xs text-slate-400 font-bold uppercase mb-2">Education</p>
-                                    <ul className="text-sm text-slate-600 space-y-1">
-                                        <li>• 3km to International School</li>
-                                        <li>• 1.5km to Primary School</li>
-                                    </ul>
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-slate-500">Tenure (Years)</span>
+                                        <span className="font-bold text-slate-700">{calcTenure} Yrs</span>
+                                    </div>
+                                    <input type="range" min={isProperty ? 5 : 1} max={isProperty ? 35 : 9} step="1" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-vexa-blue" value={calcTenure} onChange={(e) => setCalcTenure(Number(e.target.value))} />
+                                </div>
+                                <div className="pt-4 border-t border-slate-200 text-center">
+                                    <p className="text-xs text-slate-400 mb-1">Estimated Monthly</p>
+                                    <h2 className="text-2xl font-bold text-vexa-blue">RM {Math.round(monthlyPayment).toLocaleString()}</h2>
                                 </div>
                             </div>
                         </div>
@@ -429,10 +581,15 @@ export default function ListingDetail() {
                         </div>
 
                         <div className="space-y-3">
-                            <button className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-100">
+                            <a 
+                                href={whatsappLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors shadow-lg shadow-emerald-100"
+                            >
                                 <MessageCircle size={20} /> WhatsApp
-                            </button>
-                            <a href={`tel:+60123456789`} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                            </a>
+                            <a href={`tel:+${whatsappNumber}`} className="w-full bg-slate-800 hover:bg-slate-900 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 transition-colors">
                                 <Phone size={20} /> Call Now
                             </a>
                         </div>
@@ -493,9 +650,8 @@ export default function ListingDetail() {
             </div>
         </div>
 
-        {/* MOBILE FLOATING AGENT BAR (UPDATED) */}
-        {/* Changed bottom-0 to bottom-15 and increased z-index to sit above any potential bottom nav */}
-        <div className="fixed bottom-15 left-0 right-0 bg-white border-t border-slate-200 p-4 md:hidden z-40 flex items-center justify-between shadow-[0_-4px_10px_rgba(0,0,0,0.05)] mx-4 rounded-2xl mb-4">
+        {/* MOBILE FLOATING AGENT BAR */}
+        <div className="fixed bottom-[3.75rem] left-0 right-0 bg-white border-t border-slate-200 p-4 md:hidden z-40 flex items-center justify-between shadow-[0_-4px_10px_rgba(0,0,0,0.05)] mx-4 rounded-2xl mb-4">
             <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 border border-slate-200">
                     <User size={20} />
@@ -506,10 +662,15 @@ export default function ListingDetail() {
                 </div>
             </div>
             <div className="flex gap-2">
-                <button className="bg-emerald-500 text-white p-3 rounded-xl shadow-sm active:scale-95 transition-transform">
+                <a 
+                    href={whatsappLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-emerald-500 text-white p-3 rounded-xl shadow-sm active:scale-95 transition-transform"
+                >
                     <MessageCircle size={20} />
-                </button>
-                <a href={`tel:+60123456789`} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform shadow-lg">
+                </a>
+                <a href={`tel:+${whatsappNumber}`} className="bg-slate-800 text-white px-6 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2 active:scale-95 transition-transform shadow-lg">
                     <Phone size={16} /> Call Now
                 </a>
             </div>

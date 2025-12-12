@@ -23,7 +23,9 @@ import {
   CheckCircle2, 
   Building2, 
   UploadCloud,
-  AlertTriangle 
+  AlertTriangle,
+  ArrowLeft,   
+  UserCircle   
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -394,31 +396,48 @@ export default function ProDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50 font-sans pb-20">
-        <div className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
-            <div className="flex items-center gap-3">
-                <div className="bg-purple-600 p-2 rounded-lg text-white shadow-purple-200 shadow-lg">
-                    <Hammer size={24} />
-                </div>
-                <div>
-                    <h1 className="font-bold text-xl text-slate-800">Pro Console</h1>
-                    <p className="text-xs text-slate-500">Manage Services & Subscription</p>
+        {/* Top Bar */}
+        <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+            <div className="flex items-center gap-4">
+                {/* NEW: Back Button */}
+                <Link href="/dashboard" className="text-slate-400 hover:text-slate-600 transition-colors" title="Back to User Dashboard">
+                    <ArrowLeft size={24} />
+                </Link>
+
+                <div className="flex items-center gap-3">
+                    <div className="bg-purple-600 p-2 rounded-lg text-white shadow-purple-200 shadow-lg hidden md:block">
+                        <Hammer size={24} />
+                    </div>
+                    <div>
+                        <h1 className="font-bold text-lg md:text-xl text-slate-800">Pro Console</h1>
+                        <p className="text-xs text-slate-500 hidden md:block">Manage Services & Subscription</p>
+                    </div>
                 </div>
             </div>
-            <div className="flex items-center gap-4">
+
+            <div className="flex items-center gap-3 md:gap-4">
                 <div className="hidden md:flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200">
                     <Wallet size={16} className="text-slate-500" />
                     <span className="text-sm font-bold text-slate-700">{profileData.walletBalance} Credits</span>
                 </div>
-                <span className={`text-sm font-medium px-3 py-1 rounded-full ${profileData.isAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                <span className={`text-xs md:text-sm font-medium px-2 md:px-3 py-1 rounded-full ${profileData.isAvailable ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
                     {profileData.isAvailable ? '● Online' : '○ Offline'}
                 </span>
+                
+                {/* NEW: Profile Link Shortcut */}
+                <Link href="/dashboard" className="bg-slate-100 p-2 rounded-full text-slate-600 hover:bg-slate-200 transition-colors">
+                    <UserCircle size={24} />
+                </Link>
             </div>
         </div>
 
         <div className="container mx-auto p-4 md:p-8">
             <form id="pro-form" onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 
+                {/* LEFT COLUMN: EDITOR */}
                 <div className="lg:col-span-2 space-y-6">
+                    
+                    {/* 1. Identity Section */}
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                         <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                             <Briefcase className="text-purple-600" size={20} />

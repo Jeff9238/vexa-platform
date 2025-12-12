@@ -34,9 +34,13 @@ import {
   CheckCircle2,
   Ban,
   Eye,
-  Pencil, // Added Pencil for Edit
-  Search, // Added Search
-  Filter  // Added Filter
+  Pencil,
+  Search,
+  Filter,
+  ArrowLeft,
+  UserCircle,
+  Wallet,      // Added
+  CreditCard   // Added
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -49,37 +53,19 @@ declare global {
   }
 }
 
-// --- CONSTANTS ---
-const MALAYSIA_STATES = [
-  "Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", 
-  "Pahang", "Penang", "Perak", "Perlis", "Sabah", "Sarawak", 
-  "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"
-];
-
-// Property Constants
+// ... (CONSTANTS remain the same - abbreviated for brevity)
+const MALAYSIA_STATES = ["Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", "Pahang", "Penang", "Perak", "Perlis", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"];
 const PROPERTY_TYPES = ["Condominium", "Apartment", "Terrace House", "Bungalow", "Semi-D", "Commercial", "Land", "Townhouse", "Shop Lot", "Factory", "Office"];
 const PROPERTY_TENURE = ["Freehold", "Leasehold", "Malay Reserved"];
 const PROPERTY_FURNISHING = ["Unfurnished", "Partially Furnished", "Fully Furnished"];
-const PROPERTY_FACILITIES = [
-  "Swimming Pool", "Gymnasium", "24-Hour Security", "Playground", "Covered Parking", 
-  "Balcony", "Barbeque Area", "Jogging Track", "Mini Market", "Squash Court", 
-  "Tennis Court", "Lift", "Wading Pool", "Jacuzzi", "Sauna", "Club House"
-];
-
-// Vehicle Constants
+const PROPERTY_FACILITIES = ["Swimming Pool", "Gymnasium", "24-Hour Security", "Playground", "Covered Parking", "Balcony", "Barbeque Area", "Jogging Track", "Mini Market", "Squash Court", "Tennis Court", "Lift", "Wading Pool", "Jacuzzi", "Sauna", "Club House"];
 const VEHICLE_CONDITIONS = ["New", "Used", "Recon"];
-const VEHICLE_MAKES = [
-  "Toyota", "Honda", "Proton", "Perodua", "Nissan", "Mazda", "BMW", "Mercedes-Benz", 
-  "Audi", "Volkswagen", "Hyundai", "Kia", "Ford", "Mitsubishi", "Subaru", "Volvo", 
-  "Porsche", "Lexus", "Land Rover", "Mini", "Jaguar", "Peugeot", "Renault", "Tesla", 
-  "Ferrari", "Lamborghini", "Suzuki", "Isuzu", "Chery", "BYD", "Great Wall", "Others"
-];
+const VEHICLE_MAKES = ["Toyota", "Honda", "Proton", "Perodua", "Nissan", "Mazda", "BMW", "Mercedes-Benz", "Audi", "Volkswagen", "Hyundai", "Kia", "Ford", "Mitsubishi", "Subaru", "Volvo", "Porsche", "Lexus", "Land Rover", "Mini", "Jaguar", "Peugeot", "Renault", "Tesla", "Ferrari", "Lamborghini", "Suzuki", "Isuzu", "Chery", "BYD", "Great Wall", "Others"];
 const VEHICLE_BODY_TYPES = ["Sedan", "SUV", "MPV", "Hatchback", "Coupe", "Pickup Truck", "Van", "Convertible", "Wagon", "Sports Car", "4x4"];
 const VEHICLE_FUEL_TYPES = ["Petrol", "Diesel", "Hybrid", "Electric", "Plug-in Hybrid"];
 const VEHICLE_COLORS = ["White", "Black", "Silver", "Grey", "Red", "Blue", "Gold", "Brown", "Green", "Orange", "Yellow", "Purple", "Bronze", "Other"];
 const TRANSMISSIONS = ["Automatic", "Manual", "CVT", "DCT"];
 
-// --- IMAGE UTILITY ---
 const compressImage = (file: File): Promise<string> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -123,6 +109,7 @@ export default function AgentDashboard() {
   // Data State
   const [myListings, setMyListings] = useState<any[]>([]);
   const [filteredListings, setFilteredListings] = useState<any[]>([]);
+  const [walletBalance, setWalletBalance] = useState(0);
 
   // UI State
   const [isCreating, setIsCreating] = useState(false);
@@ -140,43 +127,10 @@ export default function AgentDashboard() {
   // FORM DATA
   const [listingType, setListingType] = useState<'property' | 'vehicle'>('property');
   const [formData, setFormData] = useState({
-    // Common
-    title: '',
-    description: '',
-    price: '',
-    state: '',
-    area: '', // City/Town
-    
-    // Images
-    images: [] as string[],
-    coverImage: '',
-
-    // Property Specifics
-    transType: 'Sale',
-    propertyType: 'Condominium',
-    projectName: '',
-    developer: '',
-    tenure: 'Freehold',
-    furnishing: 'Unfurnished',
-    floorLevel: '', // High, Mid, Low
-    bedrooms: '',
-    bathrooms: '',
-    parking: '',
-    size: '', // sqft
-    facilities: [] as string[],
-
-    // Vehicle Specifics
-    condition: 'Used',
-    make: 'Toyota',
-    model: '',
-    bodyType: 'Sedan',
-    year: '',
-    mileage: '',
-    color: 'White',
-    fuel: 'Petrol',
-    transmission: 'Automatic',
-    engineCapacity: '', // cc
-    seats: ''
+    title: '', description: '', price: '', state: '', area: '', 
+    images: [] as string[], coverImage: '',
+    transType: 'Sale', propertyType: 'Condominium', projectName: '', developer: '', tenure: 'Freehold', furnishing: 'Unfurnished', floorLevel: '', bedrooms: '', bathrooms: '', parking: '', size: '', facilities: [] as string[],
+    condition: 'Used', make: 'Toyota', model: '', bodyType: 'Sedan', year: '', mileage: '', color: 'White', fuel: 'Petrol', transmission: 'Automatic', engineCapacity: '', seats: ''
   });
 
   // 1. INITIALIZE & AUTH CHECK
@@ -235,7 +189,7 @@ export default function AgentDashboard() {
           if (userData.role === 'agent') {
               const currentUser = { uid: userId, ...userData };
               setUser(currentUser);
-              // Fetch Listings after Auth Success
+              setWalletBalance(userData.walletBalance || 0); // Load Wallet
               fetchMyListings(currentUser.uid, database);
           } else {
               setAccessDenied({ denied: true, reason: "Role mismatch (Not Agent)." });
@@ -250,7 +204,6 @@ export default function AgentDashboard() {
 
   const fetchMyListings = async (userId: string, database: any) => {
       try {
-          // Client-side sorting/filtering is preferred for small datasets like "My Listings"
           const snapshot = await database.collection("listings")
             .where("agentId", "==", userId)
             .get();
@@ -260,7 +213,6 @@ export default function AgentDashboard() {
               ...doc.data()
           }));
 
-          // Initial Sort
           listingsData.sort((a: any, b: any) => {
               const dateA = a.createdAt?.seconds || 0;
               const dateB = b.createdAt?.seconds || 0;
@@ -268,7 +220,7 @@ export default function AgentDashboard() {
           });
 
           setMyListings(listingsData);
-          setFilteredListings(listingsData); // Initialize filtered list
+          setFilteredListings(listingsData); 
       } catch (error) {
           console.error("Error fetching listings:", error);
       } finally {
@@ -279,13 +231,9 @@ export default function AgentDashboard() {
   // FILTER LOGIC
   useEffect(() => {
       let results = myListings;
-
-      // Filter by Type
       if (filterType !== 'all') {
           results = results.filter(item => item.type === filterType);
       }
-
-      // Filter by Search
       if (searchTerm) {
           const lowerTerm = searchTerm.toLowerCase();
           results = results.filter(item => 
@@ -293,7 +241,6 @@ export default function AgentDashboard() {
               item.id.toLowerCase().includes(lowerTerm)
           );
       }
-
       setFilteredListings(results);
   }, [filterType, searchTerm, myListings]);
 
@@ -301,7 +248,7 @@ export default function AgentDashboard() {
     if (typeof window !== 'undefined') initializeFirebase();
   }, [initializeFirebase]);
 
-  // 2. FORM HANDLERS
+  // FORM HANDLERS
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
@@ -367,7 +314,6 @@ export default function AgentDashboard() {
   const handleEdit = (listing: any) => {
       setListingType(listing.type);
       setFormData({
-          // Merge existing data with defaults to prevent undefined errors
           title: listing.title || '',
           description: listing.description || '',
           price: listing.price || '',
@@ -375,7 +321,6 @@ export default function AgentDashboard() {
           area: listing.area || '',
           images: listing.images || [],
           coverImage: listing.coverImage || '',
-          
           transType: listing.transType || 'Sale',
           propertyType: listing.propertyType || 'Condominium',
           projectName: listing.projectName || '',
@@ -388,7 +333,6 @@ export default function AgentDashboard() {
           parking: listing.parking || '',
           size: listing.size || '',
           facilities: listing.facilities || [],
-
           condition: listing.condition || 'Used',
           make: listing.make || 'Toyota',
           model: listing.model || '',
@@ -403,7 +347,7 @@ export default function AgentDashboard() {
       });
       setEditingId(listing.id);
       setIsEditing(true);
-      setIsCreating(true); // Re-use the creation modal
+      setIsCreating(true); 
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -421,16 +365,14 @@ export default function AgentDashboard() {
               type: listingType,
               agentId: user.uid,
               agentName: user.name || 'Agent',
-              status: 'pending', // Re-trigger pending on edit? Usually safer to keep existing status or set to pending for review.
+              status: 'pending', 
               updatedAt: new Date(),
           };
 
           if (isEditing && editingId) {
-              // UPDATE Existing
               await db.collection("listings").doc(editingId).update(payload);
               alert("Listing Updated! Status set to Pending for re-approval.");
           } else {
-              // CREATE New
               await db.collection("listings").add({
                   ...payload,
                   createdAt: new Date(),
@@ -443,10 +385,8 @@ export default function AgentDashboard() {
           setIsEditing(false);
           setEditingId(null);
           
-          // Refresh list
           fetchMyListings(user.uid, db);
           
-          // Reset Form
           setFormData({
             title: '', description: '', price: '', state: '', area: '', 
             images: [], coverImage: '',
@@ -461,11 +401,24 @@ export default function AgentDashboard() {
       }
   };
 
+  const handleTopUp = async () => {
+      if (!db || !user) return;
+      // Mock Top Up
+      const amount = 100; // Mock amount
+      const newBalance = walletBalance + amount;
+      try {
+          await db.collection("users").doc(user.uid).update({ walletBalance: newBalance });
+          setWalletBalance(newBalance);
+          alert(`Success! Added ${amount} credits. New Balance: ${newBalance}`);
+      } catch (e) {
+          alert("Failed to top up.");
+      }
+  };
+
   const handleCloseModal = () => {
       setIsCreating(false);
       setIsEditing(false);
       setEditingId(null);
-      // Optional: Reset form here if desired, or keep draft
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-vexa-blue" size={40} /></div>;
@@ -484,135 +437,155 @@ export default function AgentDashboard() {
   return (
     <div className="min-h-screen bg-slate-50 pb-20">
         {/* Navbar */}
-        <div className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center sticky top-0 z-10">
-            <div className="flex items-center gap-3">
-                <div className="bg-vexa-blue p-2 rounded-lg text-white"><LayoutDashboard size={24} /></div>
-                <div>
-                    <h1 className="font-bold text-xl text-slate-800">Agent Console</h1>
-                    <p className="text-xs text-slate-500">Manage Listings</p>
-                </div>
-            </div>
-            <button 
-                onClick={() => {
-                    setIsEditing(false);
-                    setEditingId(null);
-                    setFormData({
-                        title: '', description: '', price: '', state: '', area: '', 
-                        images: [], coverImage: '',
-                        transType: 'Sale', propertyType: 'Condominium', projectName: '', developer: '', tenure: 'Freehold', furnishing: 'Unfurnished', floorLevel: '', bedrooms: '', bathrooms: '', parking: '', size: '', facilities: [],
-                        condition: 'Used', make: 'Toyota', model: '', bodyType: 'Sedan', year: '', mileage: '', color: 'White', fuel: 'Petrol', transmission: 'Automatic', engineCapacity: '', seats: ''
-                    });
-                    setIsCreating(true);
-                }} 
-                className="bg-vexa-blue hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm"
-            >
-                <Plus size={20} /> Create Listing
-            </button>
-        </div>
+        <div className="bg-white border-b border-slate-200 px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-10 shadow-sm">
+            <div className="flex items-center gap-4">
+                {/* 1. Clearer Navigation Back */}
+                <Link href="/dashboard" className="flex items-center gap-2 text-slate-500 hover:text-vexa-blue transition-colors px-3 py-2 rounded-lg hover:bg-slate-50">
+                    <ArrowLeft size={20} />
+                    <span className="hidden md:inline font-medium">Switch to Buyer Mode</span>
+                </Link>
 
-        {/* Filter & Search Bar */}
-        <div className="container mx-auto px-8 pt-8">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
-                <div className="flex bg-slate-100 p-1 rounded-lg">
-                    <button 
-                        onClick={() => setFilterType('all')} 
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterType === 'all' ? 'bg-white text-vexa-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        All
-                    </button>
-                    <button 
-                        onClick={() => setFilterType('property')} 
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${filterType === 'property' ? 'bg-white text-vexa-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <Home size={14} /> Property
-                    </button>
-                    <button 
-                        onClick={() => setFilterType('vehicle')} 
-                        className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${filterType === 'vehicle' ? 'bg-white text-vexa-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                    >
-                        <Car size={14} /> Vehicle
-                    </button>
-                </div>
-                <div className="relative w-full md:w-64">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                    <input 
-                        type="text" 
-                        placeholder="Search listings..." 
-                        className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-vexa-blue/20"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-            </div>
-        </div>
+                <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
 
-        {/* Main Content */}
-        <div className="container mx-auto p-8">
-            {filteredListings.length === 0 ? (
-                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
-                    <div className="flex justify-center gap-4 mb-4 opacity-20 text-slate-800">
-                        <Home size={48} /><Car size={48} />
+                <div className="flex items-center gap-3">
+                    <div className="bg-vexa-blue p-2 rounded-lg text-white hidden md:block"><LayoutDashboard size={24} /></div>
+                    <div>
+                        <h1 className="font-bold text-lg md:text-xl text-slate-800">Agent Console</h1>
+                        <p className="text-xs text-slate-500 hidden md:block">Manage Listings</p>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-700">No Listings Found</h3>
-                    <p className="text-slate-500 mt-2">Try adjusting your filters or create a new listing.</p>
                 </div>
-            ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {filteredListings.map((listing) => (
-                        <div key={listing.id} className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden group flex flex-col h-full hover:shadow-md transition-shadow">
-                            <div className="relative h-32 bg-slate-100">
-                                {listing.coverImage ? (
-                                    <img src={listing.coverImage} alt={listing.title} className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="flex items-center justify-center h-full text-slate-300">No Image</div>
-                                )}
-                                <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
-                                    <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shadow-sm ${
-                                        listing.status === 'active' ? 'bg-emerald-500 text-white' : 
-                                        listing.status === 'suspended' ? 'bg-red-500 text-white' : 
-                                        'bg-yellow-400 text-yellow-900'
-                                    }`}>
-                                        {listing.status}
-                                    </span>
-                                </div>
-                                <div className="absolute bottom-2 left-2 bg-black/50 backdrop-blur-sm text-white px-1.5 py-0.5 rounded text-[10px] font-bold flex items-center gap-1">
-                                    {listing.type === 'property' ? <Home size={10} /> : <Car size={10} />}
-                                    {listing.type === 'property' ? 'Property' : 'Vehicle'}
-                                </div>
-                            </div>
-                            <div className="p-3 flex-1 flex flex-col">
-                                <h3 className="font-bold text-slate-800 text-sm line-clamp-1 mb-1" title={listing.title}>{listing.title}</h3>
-                                <p className="text-vexa-blue font-bold text-sm mb-1">RM {listing.price}</p>
-                                <div className="flex items-center gap-1 text-slate-500 text-[10px] mb-2 line-clamp-1">
-                                    <MapPin size={10} /> {listing.area}, {listing.state}
-                                </div>
-                                <div className="mt-auto pt-2 border-t border-slate-100 flex justify-between items-center">
-                                    <div className="flex items-center gap-2">
-                                        <Link 
-                                            href={`/listing/${listing.id}`}
-                                            className="flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-vexa-blue bg-slate-50 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
-                                        >
-                                            <Eye size={12} />
-                                        </Link>
-                                        <button 
-                                            onClick={() => handleEdit(listing)}
-                                            className="flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-orange-600 bg-slate-50 hover:bg-orange-50 px-2 py-1 rounded transition-colors"
-                                        >
-                                            <Pencil size={12} />
-                                        </button>
-                                    </div>
-                                    <div className="text-[10px] text-slate-400">
-                                        {listing.views || 0} Views
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
+            </div>
+
+            <div className="flex items-center gap-3">
+                <button 
+                    onClick={() => {
+                        setIsEditing(false);
+                        setEditingId(null);
+                        setFormData({
+                            title: '', description: '', price: '', state: '', area: '', 
+                            images: [], coverImage: '',
+                            transType: 'Sale', propertyType: 'Condominium', projectName: '', developer: '', tenure: 'Freehold', furnishing: 'Unfurnished', floorLevel: '', bedrooms: '', bathrooms: '', parking: '', size: '', facilities: [],
+                            condition: 'Used', make: 'Toyota', model: '', bodyType: 'Sedan', year: '', mileage: '', color: 'White', fuel: 'Petrol', transmission: 'Automatic', engineCapacity: '', seats: ''
+                        });
+                        setIsCreating(true);
+                    }} 
+                    className="bg-vexa-blue hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-lg flex items-center gap-2 transition-colors shadow-sm text-sm md:text-base"
+                >
+                    <Plus size={20} /> <span className="hidden md:inline">Create Listing</span>
+                </button>
+            </div>
         </div>
 
-        {/* CREATE/EDIT MODAL */}
+        <div className="container mx-auto p-4 md:p-8 flex flex-col-reverse lg:flex-row gap-8">
+            
+            {/* LEFT COLUMN: LISTINGS & TOOLS */}
+            <div className="flex-1 space-y-6">
+                
+                {/* Search & Filters */}
+                <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+                    <div className="flex bg-slate-100 p-1 rounded-lg w-full md:w-auto">
+                        <button onClick={() => setFilterType('all')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all ${filterType === 'all' ? 'bg-white text-vexa-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>All</button>
+                        <button onClick={() => setFilterType('property')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${filterType === 'property' ? 'bg-white text-vexa-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Home size={14} /> Property</button>
+                        <button onClick={() => setFilterType('vehicle')} className={`flex-1 md:flex-none px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 ${filterType === 'vehicle' ? 'bg-white text-vexa-blue shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}><Car size={14} /> Vehicle</button>
+                    </div>
+                    <div className="relative w-full md:w-64">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input type="text" placeholder="Search listings..." className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-vexa-blue/20" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                    </div>
+                </div>
+
+                {/* Listing Grid */}
+                {filteredListings.length === 0 ? (
+                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-12 text-center">
+                        <div className="flex justify-center gap-4 mb-4 opacity-20 text-slate-800">
+                            <Home size={48} /><Car size={48} />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-700">No Listings Found</h3>
+                        <p className="text-slate-500 mt-2">Try adjusting your filters or create a new listing.</p>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {filteredListings.map((listing) => (
+                            <div key={listing.id} className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden group flex flex-col h-full hover:shadow-md transition-shadow">
+                                <div className="relative h-32 md:h-40 bg-slate-100">
+                                    {listing.coverImage ? (
+                                        <img src={listing.coverImage} alt={listing.title} className="w-full h-full object-cover" />
+                                    ) : (
+                                        <div className="flex items-center justify-center h-full text-slate-300">No Image</div>
+                                    )}
+                                    <div className="absolute top-2 right-2 flex flex-col items-end gap-1">
+                                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase shadow-sm ${
+                                            listing.status === 'active' ? 'bg-emerald-500 text-white' : 
+                                            listing.status === 'suspended' ? 'bg-red-500 text-white' : 
+                                            'bg-yellow-400 text-yellow-900'
+                                        }`}>
+                                            {listing.status}
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="p-3 flex-1 flex flex-col">
+                                    <h3 className="font-bold text-slate-800 text-xs md:text-sm line-clamp-1 mb-1" title={listing.title}>{listing.title}</h3>
+                                    <p className="text-vexa-blue font-bold text-xs md:text-sm mb-1">RM {listing.price}</p>
+                                    <div className="flex items-center gap-1 text-slate-500 text-[10px] mb-2 line-clamp-1">
+                                        <MapPin size={10} /> {listing.area}, {listing.state}
+                                    </div>
+                                    <div className="mt-auto pt-2 border-t border-slate-100 flex justify-between items-center">
+                                        <div className="flex items-center gap-2">
+                                            <Link 
+                                                href={`/listing/${listing.id}`}
+                                                className="flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-vexa-blue bg-slate-50 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                                            >
+                                                <Eye size={12} />
+                                            </Link>
+                                            <button 
+                                                onClick={() => handleEdit(listing)}
+                                                className="flex items-center gap-1 text-[10px] font-bold text-slate-600 hover:text-orange-600 bg-slate-50 hover:bg-orange-50 px-2 py-1 rounded transition-colors"
+                                            >
+                                                <Pencil size={12} />
+                                            </button>
+                                        </div>
+                                        <div className="text-[10px] text-slate-400">
+                                            {listing.views || 0} Views
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* RIGHT COLUMN: WALLET & PROFILE (NEW) */}
+            <div className="w-full lg:w-80 space-y-6">
+                
+                {/* 2. Wallet Card */}
+                <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-xl shadow-lg p-6 text-white relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10"><Wallet size={100} /></div>
+                    <p className="text-slate-400 text-sm font-medium mb-1">Agent Credits</p>
+                    <h3 className="text-4xl font-bold mb-6">{walletBalance}</h3>
+                    
+                    <button onClick={handleTopUp} className="w-full bg-white/10 hover:bg-white/20 border border-white/20 text-white py-2 rounded-lg font-medium transition-all backdrop-blur-sm flex items-center justify-center gap-2">
+                        <CreditCard size={16} /> Top Up
+                    </button>
+                    <p className="text-xs text-slate-400 mt-3 text-center">For Premium Listings & Ads</p>
+                </div>
+
+                {/* Profile Snapshot */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center">
+                     <div className="w-20 h-20 bg-slate-100 rounded-full mx-auto mb-3 flex items-center justify-center text-slate-400 border-2 border-slate-50 shadow-inner">
+                        <UserCircle size={40} />
+                     </div>
+                     <h3 className="font-bold text-slate-800">{user?.name || 'Agent'}</h3>
+                     <p className="text-xs text-slate-500 mb-4">{user?.email}</p>
+                     <Link href="/dashboard" className="text-xs text-vexa-blue font-bold hover:underline">
+                        Edit Personal Profile
+                     </Link>
+                </div>
+
+            </div>
+        </div>
+
+        {/* ... (Create Modal remains the same) ... */}
         {isCreating && (
             <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
                 <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
