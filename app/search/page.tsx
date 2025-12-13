@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { 
   Search as SearchIcon, 
   MapPin, 
@@ -58,7 +58,7 @@ const PRICE_RANGES_RENT = [
     { label: "Above RM 4000", min: 4000, max: 999999999 },
 ];
 
-export default function SearchPage() {
+function SearchContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const initialType = searchParams.get('type') || 'all';
@@ -234,7 +234,7 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-12 font-sans pt-36">
         
-        {/* Header Search Bar - Fixed Below Main Header (top-16) */}
+        {/* Header Search Bar */}
         <div className={`fixed top-16 left-0 right-0 bg-white border-b border-slate-200 px-4 py-4 z-40 shadow-sm transition-transform duration-300 ease-in-out ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[200%]'}`}>
             <form onSubmit={handleSearch} className="container mx-auto flex gap-3">
                 <div className="flex-1 relative">
@@ -257,7 +257,7 @@ export default function SearchPage() {
             </form>
         </div>
 
-        {/* Filters Drawer - Fixed Below Search Bar (top-32 approx) */}
+        {/* Filters Drawer */}
         {showFilters && (
             <div className={`fixed inset-x-0 top-[9rem] bg-white border-b border-slate-200 px-4 py-6 z-30 shadow-lg animate-in slide-in-from-top-2 max-h-[70vh] overflow-y-auto transition-transform duration-300 ease-in-out ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[200%]'}`}>
                 <div className="container mx-auto space-y-6">
@@ -354,15 +354,12 @@ export default function SearchPage() {
                                         <span className={`text-[9px] font-bold px-2 py-1 rounded text-white uppercase shadow-sm ${item.type === 'property' ? 'bg-blue-600' : 'bg-orange-500'}`}>{item.type}</span>
                                         {item.transType && (<span className="text-[9px] font-bold px-2 py-1 rounded bg-slate-800 text-white uppercase shadow-sm">{item.transType}</span>)}
                                     </div>
-                                    {/* Removed Price Tag from here to avoid blocking */}
                                 </div>
                                 <div className="p-3 md:p-4 flex-1 flex flex-col">
                                     <div className="mb-2">
                                         <h3 className="font-bold text-slate-900 text-xs md:text-sm line-clamp-1 group-hover:text-vexa-blue transition-colors">{item.title}</h3>
-                                        {/* New Price Tag Position */}
                                         <p className="text-vexa-blue font-extrabold text-sm md:text-lg mt-0.5">RM {Number(item.price).toLocaleString()}</p>
                                     </div>
-                                    
                                     <div className="flex items-center gap-1 text-slate-500 text-[10px] md:text-xs mb-3"><MapPin size={12} className="flex-shrink-0" /> <span className="truncate">{item.area}, {item.state}</span></div>
                                     <div className="mt-auto grid grid-cols-2 gap-1.5 pt-3 border-t border-slate-50">
                                         {item.type === 'property' ? (
@@ -399,5 +396,13 @@ export default function SearchPage() {
 
         <MobileNav />
     </div>
+  );
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-vexa-blue" size={40} /></div>}>
+      <SearchContent />
+    </Suspense>
   );
 }
