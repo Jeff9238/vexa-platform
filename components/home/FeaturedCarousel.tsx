@@ -3,45 +3,50 @@
 import { useState, useEffect } from "react";
 import { Star, MapPin, Car, Home, Loader2 } from "lucide-react";
 import Link from "next/link";
-
-declare global {
-  interface Window {
-    firebase: any;
-    firestoreDb?: any;
-  }
-}
+import { getFirestore, collection, query, where, limit, getDocs, orderBy } from "firebase/firestore";
+import { initializeApp, getApps, getApp } from "firebase/app";
 
 export default function FeaturedCarousel() {
   const [featuredItems, setFeaturedItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-      // Fetch latest active listings from Firestore
       const fetchFeatured = async () => {
           try {
-              let db = window.firestoreDb;
-              
-              if (!db && (window as any).firebase?.apps?.length) {
-                  db = (window as any).firebase.firestore();
-              }
+              const firebaseConfig = {
+                  apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
+                  authDomain: "vexa-platform.firebaseapp.com",
+                  projectId: "vexa-platform",
+                  storageBucket: "vexa-platform.firebasestorage.app",
+                  messagingSenderId: "96646526352",
+                  appId: "1:96646526352:web:140e50442fc5e66dca2f15",
+                  measurementId: "G-C7MBKREZNG"
+              };
 
-              if (db) {
-                  // Fetch all active, client-side sort to avoid index error
-                  const snapshot = await db.collection("listings")
-                      .where("status", "==", "active")
-                      .limit(10)
-                      .get();
-                  
-                  let items = snapshot.docs.map((doc: any) => ({
-                      id: doc.id,
-                      ...doc.data()
-                  }));
-                  
-                  // Sort descending by date
-                  items.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-                  
-                  setFeaturedItems(items.slice(0, 6)); // Top 6
-              }
+              const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+              const db = getFirestore(app);
+
+              // Create Query
+              // Note: 'orderBy' might require an index if combined with 'where'. 
+              // If index is missing, it throws an error. We can try without orderBy first or catch it.
+              // Safe bet: fetch then sort client side if dataset is small (limit 10).
+              const q = query(
+                  collection(db, "listings"),
+                  where("status", "==", "active"),
+                  limit(10)
+              );
+
+              const snapshot = await getDocs(q);
+              
+              const items = snapshot.docs.map((doc) => ({
+                  id: doc.id,
+                  ...doc.data()
+              }));
+              
+              // Client-side sort to be safe against missing indexes
+              items.sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+              
+              setFeaturedItems(items.slice(0, 6)); // Top 6
           } catch (error) {
               console.error("Featured fetch error:", error);
           } finally {
@@ -49,8 +54,7 @@ export default function FeaturedCarousel() {
           }
       };
 
-      const timer = setTimeout(fetchFeatured, 1500); 
-      return () => clearTimeout(timer);
+      fetchFeatured();
   }, []);
 
   if (loading) {

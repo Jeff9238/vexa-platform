@@ -12,13 +12,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import MobileNav from "@/components/layout/MobileNav";
-
-declare global {
-  interface Window {
-    firebase: any;
-    firestoreDb?: any;
-  }
-}
+import { getFirestore, collection, query, orderBy, getDocs, doc, deleteDoc } from "firebase/firestore";
+import { initializeApp, getApps, getApp } from "firebase/app";
 
 export default function FavoritesPage() {
   const [loading, setLoading] = useState(true);
@@ -26,7 +21,6 @@ export default function FavoritesPage() {
   const [db, setDb] = useState<any>(null);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // 1. Initialize Firebase & User
   const initializeFirebase = useCallback(async () => {
     try {
         const storedUserId = localStorage.getItem("vexa_active_user_id");
@@ -37,48 +31,29 @@ export default function FavoritesPage() {
         }
         setUserId(storedUserId);
 
-        if (typeof window.firestoreDb !== 'undefined' && window.firestoreDb) {
-            setDb(window.firestoreDb);
-            fetchFavorites(window.firestoreDb, storedUserId);
-            return;
-        }
-
-        const appScript = document.createElement('script');
-        appScript.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js";
-        
-        appScript.onload = () => {
-            const firestoreScript = document.createElement('script');
-            firestoreScript.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js";
-            
-            firestoreScript.onload = () => {
-                const firebase = (window as any).firebase;
-                const firebaseConfig = {
-                    apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
-                    authDomain: "vexa-platform.firebaseapp.com",
-                    projectId: "vexa-platform",
-                    storageBucket: "vexa-platform.firebasestorage.app",
-                    messagingSenderId: "96646526352",
-                    appId: "1:96646526352:web:140e50442fc5e66dca2f15",
-                    measurementId: "G-C7MBKREZNG"
-                };
-                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-                const dbInstance = firebase.firestore();
-                window.firestoreDb = dbInstance;
-                setDb(dbInstance);
-                fetchFavorites(dbInstance, storedUserId);
-            };
-            document.head.appendChild(firestoreScript);
+        const firebaseConfig = {
+            apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
+            authDomain: "vexa-platform.firebaseapp.com",
+            projectId: "vexa-platform",
+            storageBucket: "vexa-platform.firebasestorage.app",
+            messagingSenderId: "96646526352",
+            appId: "1:96646526352:web:140e50442fc5e66dca2f15",
+            measurementId: "G-C7MBKREZNG"
         };
-        document.head.appendChild(appScript);
+
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+        const dbInstance = getFirestore(app);
+        setDb(dbInstance);
+        fetchFavorites(dbInstance, storedUserId);
     } catch (e) { console.error(e); }
   }, []);
 
   const fetchFavorites = async (database: any, uid: string) => {
       try {
-          // Fetch from the user's subcollection
-          const snapshot = await database.collection("users").doc(uid).collection("favorites").orderBy("savedAt", "desc").get();
-          const items = snapshot.docs.map((doc: any) => ({
-              id: doc.id, // This matches the listing ID
+          const q = query(collection(database, "users", uid, "favorites"), orderBy("savedAt", "desc"));
+          const snapshot = await getDocs(q);
+          const items = snapshot.docs.map((doc) => ({
+              id: doc.id,
               ...doc.data()
           }));
           setFavorites(items);
@@ -95,15 +70,13 @@ export default function FavoritesPage() {
     }
   }, [initializeFirebase]);
 
-  // Remove Logic
   const handleRemove = async (e: React.MouseEvent, listingId: string) => {
-      e.preventDefault(); // Prevent clicking the link
+      e.preventDefault();
       if (!db || !userId) return;
-
       if(!confirm("Remove from favorites?")) return;
 
       try {
-          await db.collection("users").doc(userId).collection("favorites").doc(listingId).delete();
+          await deleteDoc(doc(db, "users", userId, "favorites", listingId));
           setFavorites(prev => prev.filter(item => item.id !== listingId));
       } catch (error) {
           console.error("Error removing:", error);
@@ -112,9 +85,6 @@ export default function FavoritesPage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-12 font-sans">
-      
-      {/* Navbar removed as requested */}
-
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center gap-3 mb-8">
             <div className="bg-red-100 p-3 rounded-full text-red-600">
@@ -140,12 +110,10 @@ export default function FavoritesPage() {
                 </Link>
             </div>
         ) : (
-            // UPDATED: grid-cols-2 for mobile
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                 {favorites.map((item) => (
                     <Link href={`/listing/${item.id}`} key={item.id} className="group block relative">
                         <div className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all border border-slate-200">
-                            {/* Image */}
                             <div className="aspect-[4/3] bg-slate-200 relative overflow-hidden">
                                 {item.coverImage ? (
                                     <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
@@ -153,7 +121,6 @@ export default function FavoritesPage() {
                                     <div className="flex items-center justify-center h-full text-slate-400">No Image</div>
                                 )}
                                 
-                                {/* Remove Button */}
                                 <button 
                                     onClick={(e) => handleRemove(e, item.id)}
                                     className="absolute top-2 right-2 p-1.5 md:p-2 bg-white/90 rounded-full text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors z-10 shadow-sm"
@@ -170,7 +137,6 @@ export default function FavoritesPage() {
                                 </div>
                             </div>
 
-                            {/* Details */}
                             <div className="p-3 md:p-4">
                                 <h3 className="font-bold text-slate-900 line-clamp-1 mb-1 group-hover:text-blue-600 transition-colors text-sm md:text-base">{item.title}</h3>
                                 <p className="text-vexa-orange font-bold text-sm md:text-lg mb-1 md:mb-2">RM {Number(item.price).toLocaleString()}</p>
@@ -184,7 +150,6 @@ export default function FavoritesPage() {
             </div>
         )}
       </div>
-      
       <MobileNav />
     </div>
   );

@@ -5,7 +5,6 @@ import {
   Bell, 
   ArrowRight,
   TrendingDown,
-  Tag,
   Info,
   CheckCircle2,
   Loader2,
@@ -14,69 +13,51 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import MobileNav from "@/components/layout/MobileNav";
-
-declare global {
-  interface Window {
-    firebase: any;
-    firestoreDb?: any;
-  }
-}
+import { getFirestore, collection, query, where, orderBy, limit, getDocs, doc, updateDoc, writeBatch } from "firebase/firestore";
+import { initializeApp, getApps, getApp } from "firebase/app";
 
 export default function AlertsPage() {
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<any[]>([]);
   const [userId, setUserId] = useState<string | null>(null);
+  const [db, setDb] = useState<any>(null);
 
-  // Initialize Firebase & Fetch Data
   const initializeFirebase = useCallback(async () => {
     try {
         const storedUserId = localStorage.getItem("vexa_active_user_id");
         setUserId(storedUserId);
 
-        if (typeof window.firestoreDb !== 'undefined' && window.firestoreDb) {
-            fetchAlerts(window.firestoreDb, storedUserId);
-            return;
-        }
-        const appScript = document.createElement('script');
-        appScript.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js";
-        appScript.onload = () => {
-            const firestoreScript = document.createElement('script');
-            firestoreScript.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js";
-            firestoreScript.onload = () => {
-                const firebase = (window as any).firebase;
-                const firebaseConfig = {
-                    apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
-                    authDomain: "vexa-platform.firebaseapp.com",
-                    projectId: "vexa-platform",
-                    storageBucket: "vexa-platform.firebasestorage.app",
-                    messagingSenderId: "96646526352",
-                    appId: "1:96646526352:web:140e50442fc5e66dca2f15",
-                    measurementId: "G-C7MBKREZNG"
-                };
-                if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
-                const dbInstance = firebase.firestore();
-                window.firestoreDb = dbInstance;
-                fetchAlerts(dbInstance, storedUserId);
-            };
-            document.head.appendChild(firestoreScript);
+        const firebaseConfig = {
+            apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
+            authDomain: "vexa-platform.firebaseapp.com",
+            projectId: "vexa-platform",
+            storageBucket: "vexa-platform.firebasestorage.app",
+            messagingSenderId: "96646526352",
+            appId: "1:96646526352:web:140e50442fc5e66dca2f15",
+            measurementId: "G-C7MBKREZNG"
         };
-        document.head.appendChild(appScript);
+
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+        const dbInstance = getFirestore(app);
+        setDb(dbInstance);
+        fetchAlerts(dbInstance, storedUserId);
     } catch (e) { console.error(e); }
   }, []);
 
-  const fetchAlerts = async (db: any, uid: string | null) => {
+  const fetchAlerts = async (database: any, uid: string | null) => {
       try {
           const combinedAlerts: any[] = [];
 
-          // 1. FETCH REAL BACKEND NOTIFICATIONS (If User Logged In)
           if (uid) {
              try {
-                 const notifSnapshot = await db.collection("users").doc(uid).collection("notifications")
-                    .orderBy("createdAt", "desc")
-                    .limit(20)
-                    .get();
+                 const notifQuery = query(
+                     collection(database, "users", uid, "notifications"),
+                     orderBy("createdAt", "desc"),
+                     limit(20)
+                 );
+                 const notifSnapshot = await getDocs(notifQuery);
                  
-                 const realNotifs = notifSnapshot.docs.map((doc: any) => {
+                 const realNotifs = notifSnapshot.docs.map((doc) => {
                      const data = doc.data();
                      return {
                          id: doc.id,
@@ -91,24 +72,25 @@ export default function AlertsPage() {
              }
           }
 
-          // 2. FETCH RECOMMENDATIONS (Frontend Generated from Active Listings)
-          // We fetch the latest active listings to show "New Arrivals" even without backend triggers
           let listingSnapshot;
           try {
-              listingSnapshot = await db.collection("listings")
-                  .where("status", "==", "active")
-                  .orderBy("createdAt", "desc")
-                  .limit(10)
-                  .get();
+              const q = query(
+                  collection(database, "listings"),
+                  where("status", "==", "active"),
+                  orderBy("createdAt", "desc"),
+                  limit(10)
+              );
+              listingSnapshot = await getDocs(q);
           } catch (indexError) {
-              // Fallback if index missing
-              listingSnapshot = await db.collection("listings")
-                  .where("status", "==", "active")
-                  .limit(10)
-                  .get();
+              const q = query(
+                  collection(database, "listings"),
+                  where("status", "==", "active"),
+                  limit(10)
+              );
+              listingSnapshot = await getDocs(q);
           }
 
-          const recommendations = listingSnapshot.docs.map((doc: any) => {
+          const recommendations = listingSnapshot.docs.map((doc) => {
               const data = doc.data();
               const isProperty = data.type === 'property';
               const date = data.createdAt?.seconds ? new Date(data.createdAt.seconds * 1000) : new Date();
@@ -126,7 +108,6 @@ export default function AlertsPage() {
               };
           });
 
-          // Filter out recommendations if we already have a real notification for that listing ID
           const uniqueRecs = recommendations.filter((rec: any) => 
              !combinedAlerts.some((alert: any) => alert.link === rec.link)
           );
@@ -146,13 +127,11 @@ export default function AlertsPage() {
   }, [initializeFirebase]);
 
   const markAsRead = async (alert: any) => {
-    // Optimistic UI update
     setAlerts(prev => prev.map(a => a.id === alert.id ? { ...a, read: true } : a));
     
-    // If it's a real backend notification, update DB
-    if (alert.source === 'backend' && userId && window.firestoreDb) {
+    if (alert.source === 'backend' && userId && db) {
         try {
-            await window.firestoreDb.collection("users").doc(userId).collection("notifications").doc(alert.id).update({
+            await updateDoc(doc(db, "users", userId, "notifications", alert.id), {
                 read: true
             });
         } catch (e) { console.error("Failed to mark read in DB", e); }
@@ -161,14 +140,11 @@ export default function AlertsPage() {
 
   const markAllRead = () => {
     setAlerts(prev => prev.map(a => ({ ...a, read: true })));
-    // In production, batch update Firestore here
   };
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-12 font-sans">
-      
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="flex items-center justify-between mb-8">
             <div className="flex items-center gap-3">
                 <div className="bg-orange-100 p-3 rounded-full text-orange-600">
@@ -189,7 +165,6 @@ export default function AlertsPage() {
             )}
         </div>
 
-        {/* Alerts List */}
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             {loading ? (
                 <div className="flex justify-center py-20">
@@ -214,7 +189,6 @@ export default function AlertsPage() {
                             className={`block p-4 md:p-6 hover:bg-slate-50 transition-colors relative ${!alert.read ? 'bg-blue-50/40' : ''}`}
                         >
                             <div className="flex gap-4">
-                                {/* Icon based on type */}
                                 <div className={`mt-1 p-2 rounded-full h-fit flex-shrink-0 ${
                                     alert.type === 'price_drop' ? 'bg-green-100 text-green-600' :
                                     alert.iconType === 'property' ? 'bg-blue-100 text-blue-600' :
@@ -227,7 +201,6 @@ export default function AlertsPage() {
                                      <Info size={20} />}
                                 </div>
                                 
-                                {/* Content */}
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start mb-1">
                                         <h4 className={`font-bold text-sm md:text-base ${!alert.read ? 'text-slate-900' : 'text-slate-700'}`}>
@@ -239,7 +212,6 @@ export default function AlertsPage() {
                                     <p className="text-slate-600 text-sm leading-relaxed line-clamp-2">{alert.message}</p>
                                 </div>
                                 
-                                {/* Arrow Indicator */}
                                 <div className="self-center text-slate-300">
                                     <ArrowRight size={18} />
                                 </div>
@@ -250,7 +222,6 @@ export default function AlertsPage() {
             )}
         </div>
       </div>
-      
       <MobileNav />
     </div>
   );

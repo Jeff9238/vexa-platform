@@ -1,20 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Heart, Clock, Settings, Bell, Briefcase, Loader2, Hammer, ArrowRight, LogIn, UserPlus, LogOut, AlertCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "firebase/auth";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot } from "firebase/firestore";
 
 interface UserViewProps {
   profile: any;
-}
-
-declare global {
-  interface Window {
-    firebaseApp?: any;
-    firestoreDb?: any;
-    firebase: any; 
-  }
 }
 
 export default function UserView({ profile }: UserViewProps) {
@@ -22,9 +17,6 @@ export default function UserView({ profile }: UserViewProps) {
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(true); 
   const [proLoading, setProLoading] = useState(false); 
-  const [db, setDb] = useState<any>(null);
-  const [auth, setAuth] = useState<any>(null);
-  const [isDbReady, setIsDbReady] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
   
   const [currentUser, setCurrentUser] = useState<any>(null); 
@@ -42,149 +34,129 @@ export default function UserView({ profile }: UserViewProps) {
   const agentRequestStatus = localProfile?.agentRequest?.status || 'none';
   const proRequestStatus = localProfile?.proRequest?.status || 'none';
 
-  // --- 1. INITIALIZE FIREBASE & AUTH ---
-  const initializeFirebase = useCallback(async () => {
-    try {
-      setConnectionError(false);
+  // Initialize Firebase (Modular)
+  useEffect(() => {
+    let unsubscribeAuth: () => void;
+    let unsubscribeDoc: () => void;
 
-      // A. Load Scripts if missing
-      if (!(window as any).firebase) {
-          await new Promise((resolve, reject) => {
-              const appScript = document.createElement('script');
-              appScript.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js";
-              appScript.onload = resolve;
-              appScript.onerror = () => reject(new Error("Failed to load Firebase App"));
-              document.head.appendChild(appScript);
-          });
-          
-          await Promise.all([
-              new Promise((resolve, reject) => {
-                  const s = document.createElement('script');
-                  s.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js";
-                  s.onload = resolve;
-                  s.onerror = () => reject(new Error("Failed to load Firestore"));
-                  document.head.appendChild(s);
-              }),
-              new Promise((resolve, reject) => {
-                  const s = document.createElement('script');
-                  s.src = "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js";
-                  s.onload = resolve;
-                  s.onerror = () => reject(new Error("Failed to load Auth"));
-                  document.head.appendChild(s);
-              })
-          ]);
-      }
+    const init = async () => {
+      try {
+        const firebaseConfig = {
+            apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
+            authDomain: "vexa-platform.firebaseapp.com",
+            projectId: "vexa-platform",
+            storageBucket: "vexa-platform.firebasestorage.app",
+            messagingSenderId: "96646526352",
+            appId: "1:96646526352:web:140e50442fc5e66dca2f15",
+            measurementId: "G-C7MBKREZNG"
+        };
 
-      // B. Initialize App (Run this even if scripts were already present)
-      const firebase = (window as any).firebase;
-      
-      if (!firebase) throw new Error("Firebase object not found in window");
+        const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+        const auth = getAuth(app);
+        const db = getFirestore(app);
 
-      const firebaseConfig = {
-          apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
-          authDomain: "vexa-platform.firebaseapp.com",
-          projectId: "vexa-platform",
-          storageBucket: "vexa-platform.firebasestorage.app",
-          messagingSenderId: "96646526352",
-          appId: "1:96646526352:web:140e50442fc5e66dca2f15",
-          measurementId: "G-C7MBKREZNG"
-      };
+        // Expose db for other components if needed (legacy support)
+        (window as any).firestoreDb = db;
 
-      if (!firebase.apps.length) {
-          firebase.initializeApp(firebaseConfig);
-      }
-
-      const dbInstance = firebase.firestore();
-      const authInstance = firebase.auth();
-      
-      setDb(dbInstance);
-      setAuth(authInstance);
-      window.firestoreDb = dbInstance;
-      setIsDbReady(true); 
-
-      // C. Listen for Auth Changes
-      authInstance.onAuthStateChanged(async (user: any) => {
+        unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
           if (user) {
-              console.log("User Logged In:", user.uid);
-              setCurrentUser(user);
-              localStorage.setItem("vexa_active_user_id", user.uid);
+            console.log("User Logged In:", user.uid);
+            setCurrentUser(user);
+            localStorage.setItem("vexa_active_user_id", user.uid);
 
-              const docRef = dbInstance.collection("users").doc(user.uid);
-              
-              try {
-                  const docSnap = await docRef.get();
-                  if (docSnap.exists) {
-                      setLocalProfile(docSnap.data());
-                  } else {
-                      // Create Profile if missing (Self-Repair)
-                      const newProfile = {
-                          name: user.email?.split('@')[0] || 'User',
-                          email: user.email,
-                          role: 'user',
-                          createdAt: new Date()
-                      };
-                      await docRef.set(newProfile);
-                      setLocalProfile(newProfile);
-                  }
-
-                  // Real-time listener
-                  docRef.onSnapshot((snap: any) => {
-                      if (snap.exists) setLocalProfile(snap.data());
-                  });
-              } catch (err) {
-                  console.error("Firestore Error:", err);
-                  // Allow UI to load even if Firestore fails (Permission/Network)
+            const docRef = doc(db, "users", user.uid);
+            
+            try {
+              const docSnap = await getDoc(docRef);
+              if (docSnap.exists()) {
+                setLocalProfile(docSnap.data());
+              } else {
+                const newProfile = {
+                  name: user.email?.split('@')[0] || 'User',
+                  email: user.email,
+                  role: 'user',
+                  createdAt: new Date()
+                };
+                await setDoc(docRef, newProfile);
+                setLocalProfile(newProfile);
               }
+
+              // Real-time listener for profile changes
+              unsubscribeDoc = onSnapshot(docRef, (snap) => {
+                if (snap.exists()) setLocalProfile(snap.data());
+              });
+
+            } catch (err) {
+              console.error("Firestore Error:", err);
+            }
           } else {
-              setCurrentUser(null);
-              setLocalProfile(null);
-              localStorage.removeItem("vexa_active_user_id");
+            setCurrentUser(null);
+            setLocalProfile(null);
+            localStorage.removeItem("vexa_active_user_id");
+            if (unsubscribeDoc) unsubscribeDoc();
           }
           setAuthLoading(false);
-      });
+        });
 
-    } catch (e) {
-      console.error("Firebase Init Error:", e);
-      setConnectionError(true);
-      setAuthLoading(false);
-    }
+      } catch (e) {
+        console.error("Firebase Init Error:", e);
+        setConnectionError(true);
+        setAuthLoading(false);
+      }
+    };
+
+    init();
+
+    return () => {
+      if (unsubscribeAuth) unsubscribeAuth();
+      if (unsubscribeDoc) unsubscribeDoc();
+    };
   }, []);
 
-  useEffect(() => {
-    initializeFirebase();
-  }, [initializeFirebase]);
-
-  // --- ACTIONS ---
   const handleLogin = async (e: React.FormEvent) => {
       e.preventDefault();
       setAuthError("");
+      setLoading(true);
       try {
-          await auth.signInWithEmailAndPassword(email, password);
+          const auth = getAuth();
+          await signInWithEmailAndPassword(auth, email, password);
       } catch (err: any) {
-          setAuthError(err.message);
+          console.error(err);
+          setAuthError(err.message || "Failed to login");
+      } finally {
+          setLoading(false);
       }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
       e.preventDefault();
       setAuthError("");
+      setLoading(true);
       try {
-          await auth.createUserWithEmailAndPassword(email, password);
+          const auth = getAuth();
+          await createUserWithEmailAndPassword(auth, email, password);
       } catch (err: any) {
-          setAuthError(err.message);
+          console.error(err);
+          setAuthError(err.message || "Failed to register");
+      } finally {
+          setLoading(false);
       }
   };
 
   const handleLogout = async () => {
-      await auth.signOut();
-      window.location.reload();
+      if (confirm("Are you sure you want to sign out?")) {
+          const auth = getAuth();
+          await signOut(auth);
+          router.refresh();
+      }
   };
 
   const handleRequestAgent = async () => {
-    if (!db || !currentUser) { alert("System connecting..."); return; }
+    if (!currentUser) return;
     try {
       setLoading(true);
-      await db.collection("users").doc(currentUser.uid).set({
+      const db = getFirestore();
+      await setDoc(doc(db, "users", currentUser.uid), {
         agentRequest: { status: 'pending', requestedAt: new Date() },
         email: currentUser.email,
         name: localProfile?.name || currentUser.email?.split('@')[0],
@@ -199,10 +171,11 @@ export default function UserView({ profile }: UserViewProps) {
   };
 
   const handleRequestPro = async () => {
-    if (!db || !currentUser) { alert("System connecting..."); return; }
+    if (!currentUser) return;
     try {
       setProLoading(true);
-      await db.collection("users").doc(currentUser.uid).set({
+      const db = getFirestore();
+      await setDoc(doc(db, "users", currentUser.uid), {
         proRequest: { status: 'pending', requestedAt: new Date(), proType: 'General Service Provider' },
         email: currentUser.email,
         name: localProfile?.name || currentUser.email?.split('@')[0],
@@ -224,7 +197,6 @@ export default function UserView({ profile }: UserViewProps) {
       );
   }
 
-  // 1. LOGIN / REGISTER SCREEN
   if (!currentUser) {
       return (
           <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
@@ -244,8 +216,8 @@ export default function UserView({ profile }: UserViewProps) {
                           <input type="password" required className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-vexa-blue/20 outline-none" value={password} onChange={e => setPassword(e.target.value)} />
                       </div>
                       {authError && <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2"><AlertCircle size={16} /> {authError}</div>}
-                      <button type="submit" className="w-full bg-vexa-blue hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2">
-                          {isRegistering ? <UserPlus size={18} /> : <LogIn size={18} />}
+                      <button type="submit" disabled={loading} className="w-full bg-vexa-blue hover:bg-blue-700 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-70">
+                          {loading ? <Loader2 className="animate-spin" /> : (isRegistering ? <UserPlus size={18} /> : <LogIn size={18} />)}
                           {isRegistering ? "Sign Up" : "Sign In"}
                       </button>
                   </form>
@@ -260,7 +232,6 @@ export default function UserView({ profile }: UserViewProps) {
       );
   }
 
-  // 2. DASHBOARD
   return (
     <div className="min-h-screen bg-slate-50 pb-24 pt-20 container mx-auto px-4">
        <div className="mb-8 flex justify-between items-end">
@@ -288,7 +259,6 @@ export default function UserView({ profile }: UserViewProps) {
 
        <div className="space-y-4">
          
-         {/* 1. AGENT SECTION */}
          {!isAdmin && !isPro && (
            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
              {isAgent ? (
@@ -304,14 +274,14 @@ export default function UserView({ profile }: UserViewProps) {
              ) : (
                <button 
                  onClick={handleRequestAgent}
-                 disabled={agentRequestStatus === 'pending' || loading || !isDbReady}
+                 disabled={agentRequestStatus === 'pending' || loading || !currentUser}
                  className="w-full flex items-center gap-4 text-left transition-all hover:bg-slate-50 disabled:opacity-70 disabled:cursor-not-allowed"
                >
                  <div className={`p-3 rounded-lg ${agentRequestStatus === 'pending' ? 'bg-yellow-50 text-yellow-600' : 'bg-vexa-blue/10 text-vexa-blue'}`}>
                    {loading ? <Loader2 size={24} className="animate-spin" /> : <Briefcase size={24} />}
                  </div>
                  <div className="flex-1">
-                   <h3 className="font-bold text-vexa-blue">{agentRequestStatus === 'pending' ? 'Agent Request Pending' : !isDbReady ? 'Loading System...' : 'Become an Agent'}</h3>
+                   <h3 className="font-bold text-vexa-blue">{agentRequestStatus === 'pending' ? 'Agent Request Pending' : 'Become an Agent'}</h3>
                    <p className="text-xs text-gray-400">{agentRequestStatus === 'pending' ? 'Waiting for admin approval...' : 'Unlock listing features'}</p>
                  </div>
                </button>
@@ -319,7 +289,6 @@ export default function UserView({ profile }: UserViewProps) {
            </div>
          )}
 
-         {/* 2. PRO SECTION */}
          {!isAdmin && !isAgent && (
            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
              {isPro ? (
@@ -335,14 +304,14 @@ export default function UserView({ profile }: UserViewProps) {
              ) : (
                <button 
                  onClick={handleRequestPro}
-                 disabled={proRequestStatus === 'pending' || proLoading || !isDbReady}
+                 disabled={proRequestStatus === 'pending' || proLoading || !currentUser}
                  className="w-full flex items-center gap-4 text-left transition-all hover:bg-slate-50 disabled:opacity-70 disabled:cursor-not-allowed"
                >
                  <div className={`p-3 rounded-lg ${proRequestStatus === 'pending' ? 'bg-yellow-50 text-yellow-600' : 'bg-purple-50 text-purple-600'}`}>
                    {proLoading ? <Loader2 size={24} className="animate-spin" /> : <Hammer size={24} />}
                  </div>
                  <div className="flex-1">
-                   <h3 className="font-bold text-purple-700">{proRequestStatus === 'pending' ? 'Pro Request Pending' : !isDbReady ? 'Loading System...' : 'Become a Service Pro'}</h3>
+                   <h3 className="font-bold text-purple-700">{proRequestStatus === 'pending' ? 'Pro Request Pending' : 'Become a Service Pro'}</h3>
                    <p className="text-xs text-gray-400">{proRequestStatus === 'pending' ? 'Waiting for admin approval...' : 'Register as a Renovator or Plumber'}</p>
                  </div>
                </button>

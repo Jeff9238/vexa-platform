@@ -13,7 +13,6 @@ export default function Header() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Initialize Firebase (Singleton)
     const firebaseConfig = {
         apiKey: "AIzaSyDo4yfchuY8FVunbz_ZinubrbZtSuATOGg",
         authDomain: "vexa-platform.firebaseapp.com",
@@ -27,7 +26,6 @@ export default function Header() {
     const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
     const auth = getAuth(app);
 
-    // 2. Listen for Auth State
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -37,16 +35,18 @@ export default function Header() {
   }, []);
 
   const handleSignOut = async () => {
-    const auth = getAuth();
-    await signOut(auth);
-    localStorage.removeItem("vexa_active_user_id");
-    router.refresh();
+    if (confirm("Are you sure you want to sign out?")) {
+        const auth = getAuth();
+        await signOut(auth);
+        localStorage.removeItem("vexa_active_user_id");
+        router.push('/');
+        router.refresh();
+    }
   };
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white shadow-sm border-b border-gray-100">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-        {/* LOGO */}
         <Link href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 bg-vexa-blue rounded-lg flex items-center justify-center bg-slate-900">
             <span className="text-orange-500 font-bold text-xl">V</span>
@@ -56,7 +56,6 @@ export default function Header() {
           </span>
         </Link>
 
-        {/* DESKTOP NAVIGATION */}
         <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
           <Link href="/search?type=property&transType=Sale" className="hover:text-blue-600 transition-colors">Buy</Link>
           <Link href="/search?type=property&transType=Rent" className="hover:text-blue-600 transition-colors">Rent</Link>
@@ -64,10 +63,7 @@ export default function Header() {
           <Link href="/services" className="hover:text-purple-600 transition-colors">Trusted Pros</Link>
         </nav>
 
-        {/* RIGHT SIDE ACTIONS */}
         <div className="flex items-center gap-4">
-          
-          {/* Dashboard Link (Only if Signed In) */}
           {!loading && user && (
             <Link 
               href="/dashboard" 
@@ -78,17 +74,14 @@ export default function Header() {
             </Link>
           )}
 
-          {/* Post Ad Button (Desktop) */}
           <Link href="/dashboard" className="hidden md:flex items-center gap-2 bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-full font-medium transition-all shadow-md hover:shadow-lg">
             <PlusCircle size={18} />
             <span>Post Ad</span>
           </Link>
 
-          {/* Auth Buttons */}
           {!loading && (
              user ? (
                 <div className="flex items-center gap-3">
-                    {/* Simple Avatar / Logout */}
                     <button 
                         onClick={handleSignOut}
                         className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-red-50 hover:text-red-600 transition-colors"
