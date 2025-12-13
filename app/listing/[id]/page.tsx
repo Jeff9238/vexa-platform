@@ -30,7 +30,8 @@ import {
   Layers,
   MessageCircle,
   User,
-  Phone
+  Phone,
+  LayoutTemplate
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -60,6 +61,10 @@ export default function ListingDetail() {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [images, setImages] = useState<string[]>([]); 
+
+  // Layouts Tab State
+  const [activeLayoutId, setActiveLayoutId] = useState<string | null>(null);
+  const [activeLayoutImage, setActiveLayoutImage] = useState<string | null>(null); // New lightbox state
 
   // Calculator State
   const [calcDownpayment, setCalcDownpayment] = useState(10); 
@@ -113,8 +118,13 @@ export default function ListingDetail() {
               }
               setImages(sortedImages);
 
+              // Set Active Layout Default
+              if (data.layouts && data.layouts.length > 0) {
+                  setActiveLayoutId(data.layouts[0].id);
+              }
+
               // Set Calculator Defaults
-              if (data.type === 'property') {
+              if (data.type === 'property' || data.type === 'project') {
                   setCalcInterest(4.2); 
                   setCalcTenure(30);
               } else {
@@ -239,7 +249,7 @@ export default function ListingDetail() {
       const rate = calcInterest / 100;
       let monthly = 0;
 
-      if (listing.type === 'property') {
+      if (listing.type === 'property' || listing.type === 'project') {
           const monthlyRate = rate / 12;
           const months = calcTenure * 12;
           if (monthlyRate === 0) monthly = principal / months;
@@ -269,19 +279,7 @@ export default function ListingDetail() {
   
   const whatsappNumber = listing.agentPhone ? listing.agentPhone.replace(/\D/g, '') : '60123456789'; 
   const whatsappLink = `https://wa.me/${whatsappNumber}?text=Hi ${listing.agentName}, I'm interested in your listing: ${listing.title} on VEXA.`;
-  const isProperty = listing.type === 'property';
-
-  const getPriceColor = (price: number, avg: number) => {
-      if (price < avg * 0.95) return "text-emerald-600";
-      if (price > avg * 1.05) return "text-red-600";
-      return "text-blue-600";
-  };
-
-  const getPriceLabel = (price: number, avg: number) => {
-      if (price < avg * 0.95) return "Good Deal";
-      if (price > avg * 1.05) return "Premium Price";
-      return "Fair Market Value";
-  };
+  const isProperty = listing.type === 'property' || listing.type === 'project';
 
   // --- RENDER HELPERS ---
   const renderFacilities = () => {
@@ -310,10 +308,19 @@ export default function ListingDetail() {
                       <>
                           <div><span className="text-slate-500 block text-xs uppercase font-semibold">Tenure</span> <span className="font-medium text-slate-800">{listing.tenure || '-'}</span></div>
                           <div><span className="text-slate-500 block text-xs uppercase font-semibold">Furnishing</span> <span className="font-medium text-slate-800">{listing.furnishing || '-'}</span></div>
-                          <div><span className="text-slate-500 block text-xs uppercase font-semibold">Developer</span> <span className="font-medium text-slate-800">{listing.developer || '-'}</span></div>
-                          <div><span className="text-slate-500 block text-xs uppercase font-semibold">Project Name</span> <span className="font-medium text-slate-800">{listing.projectName || '-'}</span></div>
+                          <div><span className="text-slate-500 block text-xs uppercase font-semibold">Developer</span> <span className="font-medium text-slate-800">{listing.developer || listing.agentName || '-'}</span></div>
+                          <div><span className="text-slate-500 block text-xs uppercase font-semibold">Project Name</span> <span className="font-medium text-slate-800">{listing.projectName || listing.title || '-'}</span></div>
                           <div><span className="text-slate-500 block text-xs uppercase font-semibold">Floor Level</span> <span className="font-medium text-slate-800">{listing.floorLevel || '-'}</span></div>
                           <div><span className="text-slate-500 block text-xs uppercase font-semibold">Posted Date</span> <span className="font-medium text-slate-800">{listing.createdAt?.seconds ? new Date(listing.createdAt.seconds * 1000).toLocaleDateString() : '-'}</span></div>
+                          {/* NEW FIELDS */}
+                          <div><span className="text-slate-500 block text-xs uppercase font-semibold">Bedrooms</span> <span className="font-medium text-slate-800">{listing.bedrooms || '-'}</span></div>
+                          <div><span className="text-slate-500 block text-xs uppercase font-semibold">Bathrooms</span> <span className="font-medium text-slate-800">{listing.bathrooms || '-'}</span></div>
+                          {listing.type === 'project' && (
+                              <>
+                                <div><span className="text-slate-500 block text-xs uppercase font-semibold">Total Units</span> <span className="font-medium text-slate-800">{listing.totalUnits || '-'}</span></div>
+                                <div><span className="text-slate-500 block text-xs uppercase font-semibold">Completion</span> <span className="font-medium text-slate-800">{listing.completionYear || '-'}</span></div>
+                              </>
+                          )}
                       </>
                   ) : (
                       <>
@@ -328,6 +335,59 @@ export default function ListingDetail() {
               </div>
           </div>
       );
+  };
+
+  // --- RENDER LAYOUTS (Floor Plans with TABS) ---
+  const renderLayouts = () => {
+    if (!listing.layouts || listing.layouts.length === 0) return null;
+    
+    // Find active layout data
+    const activeLayout = listing.layouts.find((l: any) => l.id === activeLayoutId) || listing.layouts[0];
+
+    return (
+        <div className="mb-8">
+            <h3 className="font-bold text-slate-800 mb-4 text-lg flex items-center gap-2"><LayoutTemplate size={20}/> Unit Types & Floor Plans</h3>
+            
+            {/* Tabs */}
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-4 scrollbar-hide">
+                {listing.layouts.map((layout: any) => (
+                    <button 
+                        key={layout.id}
+                        onClick={() => setActiveLayoutId(layout.id)}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold whitespace-nowrap transition-colors ${
+                            activeLayoutId === layout.id 
+                                ? 'bg-vexa-blue text-white shadow-md' 
+                                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        }`}
+                    >
+                        {layout.name}
+                    </button>
+                ))}
+            </div>
+
+            {/* Active Content */}
+            <div className="border border-slate-200 rounded-xl p-4 bg-white shadow-sm transition-all animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex justify-between items-start mb-4">
+                     <div>
+                        <h4 className="font-bold text-slate-900 text-lg">{activeLayout.name}</h4>
+                        <p className="text-sm text-slate-500 font-medium">{activeLayout.size} sqft</p>
+                     </div>
+                </div>
+                <div 
+                    className="aspect-video bg-slate-50 rounded-lg overflow-hidden relative cursor-pointer group" 
+                    onClick={() => {
+                        if(activeLayout.image) setActiveLayoutImage(activeLayout.image);
+                    }}
+                >
+                    {activeLayout.image ? (
+                        <img src={activeLayout.image} className="w-full h-full object-contain" alt={`${activeLayout.name} Floor Plan`} />
+                    ) : (
+                        <div className="flex items-center justify-center h-full text-slate-400 text-sm">No Floor Plan Available</div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
   };
 
   const renderNearby = () => {
@@ -474,6 +534,7 @@ export default function ListingDetail() {
                         </div>
 
                         {renderSpecs()}
+                        {renderLayouts()}
                         {renderFacilities()}
                         {renderNearby()}
 
@@ -542,7 +603,7 @@ export default function ListingDetail() {
                                         />
                                     </div>
                                     <div className="pt-4 border-t border-slate-200 text-center">
-                                        <p className="text-xs text-slate-400 mb-1">Estimated Monthly</p>
+                                        <p className="text-xs text-slate-400 mb-1">Estimated Monthly Payment</p>
                                         <h2 className="text-2xl font-bold text-vexa-blue">RM {Math.round(monthlyPayment).toLocaleString()}</h2>
                                     </div>
                                 </div>
@@ -648,7 +709,7 @@ export default function ListingDetail() {
             </div>
         </div>
 
-        {/* Lightbox */}
+        {/* Lightbox for Gallery */}
         {isLightboxOpen && (
             <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4">
                 <button onClick={() => setIsLightboxOpen(false)} className="absolute top-4 right-4 text-white/70 hover:text-white p-2"><X size={32} /></button>
@@ -657,6 +718,19 @@ export default function ListingDetail() {
                     <button onClick={(e) => { e.stopPropagation(); prevImage(); }} className="absolute left-2 md:-left-12 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md"><ChevronLeft size={32} /></button>
                     <button onClick={(e) => { e.stopPropagation(); nextImage(); }} className="absolute right-2 md:-right-12 top-1/2 -translate-y-1/2 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md"><ChevronRight size={32} /></button>
                 </div>
+            </div>
+        )}
+
+        {/* Lightbox for Floor Layout */}
+        {activeLayoutImage && (
+            <div className="fixed inset-0 z-[100] bg-black/95 flex items-center justify-center p-4 backdrop-blur-md" onClick={() => setActiveLayoutImage(null)}>
+                <button className="absolute top-4 right-4 text-white/70 hover:text-white transition-colors p-2"><X size={32} /></button>
+                <img 
+                    src={activeLayoutImage} 
+                    className="max-h-[90vh] max-w-full rounded-lg shadow-2xl bg-white p-2 object-contain" 
+                    alt="Floor Plan Fullscreen"
+                    onClick={(e) => e.stopPropagation()} 
+                />
             </div>
         )}
     </div>
