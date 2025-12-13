@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Heart, Clock, Settings, Bell, Briefcase, Loader2, Hammer, ArrowRight, LogIn, UserPlus, LogOut, AlertCircle, RefreshCw } from "lucide-react";
+import { Heart, Clock, Settings, Bell, Briefcase, Loader2, Hammer, ArrowRight, LogIn, UserPlus, LogOut, AlertCircle, RefreshCw, Building } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { initializeApp, getApps, getApp } from "firebase/app";
@@ -17,6 +17,7 @@ export default function UserView({ profile }: UserViewProps) {
   const [loading, setLoading] = useState(false);
   const [authLoading, setAuthLoading] = useState(true); 
   const [proLoading, setProLoading] = useState(false); 
+  const [devLoading, setDevLoading] = useState(false);
   const [connectionError, setConnectionError] = useState(false);
   
   const [currentUser, setCurrentUser] = useState<any>(null); 
@@ -30,9 +31,11 @@ export default function UserView({ profile }: UserViewProps) {
   // Derived state
   const isAgent = localProfile?.role === 'agent';
   const isPro = localProfile?.role === 'pro';
+  const isDeveloper = localProfile?.role === 'developer';
   const isAdmin = localProfile?.role === 'admin';
   const agentRequestStatus = localProfile?.agentRequest?.status || 'none';
   const proRequestStatus = localProfile?.proRequest?.status || 'none';
+  const developerRequestStatus = localProfile?.developerRequest?.status || 'none';
 
   // Initialize Firebase (Modular)
   useEffect(() => {
@@ -189,6 +192,25 @@ export default function UserView({ profile }: UserViewProps) {
     finally { setProLoading(false); }
   };
 
+  const handleRequestDeveloper = async () => {
+    if (!currentUser) return;
+    try {
+      setDevLoading(true);
+      const db = getFirestore();
+      await setDoc(doc(db, "users", currentUser.uid), {
+        developerRequest: { status: 'pending', requestedAt: new Date() },
+        email: currentUser.email,
+        name: localProfile?.name || currentUser.email?.split('@')[0],
+        role: localProfile?.role || 'user'
+      }, { merge: true });
+      alert("Developer request sent successfully!");
+    } catch (error) { 
+        console.error(error);
+        alert("Request Failed. Check console."); 
+    } 
+    finally { setDevLoading(false); }
+  };
+
   if (authLoading) {
       return (
           <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -242,6 +264,7 @@ export default function UserView({ profile }: UserViewProps) {
                 <span className="text-xs text-gray-300 font-mono hidden md:inline">ID: {currentUser.uid.substring(0, 8)}...</span>
                 {isAgent && <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full font-bold border border-emerald-200">AGENT</span>}
                 {isPro && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full font-bold border border-purple-200">PRO</span>}
+                {isDeveloper && <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold border border-blue-200">DEV</span>}
                 {isAdmin && <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full font-bold border border-red-200">ADMIN</span>}
              </div>
          </div>
@@ -259,7 +282,7 @@ export default function UserView({ profile }: UserViewProps) {
 
        <div className="space-y-4">
          
-         {!isAdmin && !isPro && (
+         {!isAdmin && !isPro && !isDeveloper && (
            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
              {isAgent ? (
                <div className="bg-emerald-50 p-4 rounded-lg border border-emerald-100">
@@ -289,7 +312,7 @@ export default function UserView({ profile }: UserViewProps) {
            </div>
          )}
 
-         {!isAdmin && !isAgent && (
+         {!isAdmin && !isAgent && !isDeveloper && (
            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
              {isPro ? (
                <div className="bg-purple-50 p-4 rounded-lg border border-purple-100">
@@ -313,6 +336,36 @@ export default function UserView({ profile }: UserViewProps) {
                  <div className="flex-1">
                    <h3 className="font-bold text-purple-700">{proRequestStatus === 'pending' ? 'Pro Request Pending' : 'Become a Service Pro'}</h3>
                    <p className="text-xs text-gray-400">{proRequestStatus === 'pending' ? 'Waiting for admin approval...' : 'Register as a Renovator or Plumber'}</p>
+                 </div>
+               </button>
+             )}
+           </div>
+         )}
+
+         {!isAdmin && !isAgent && !isPro && (
+           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-100">
+             {isDeveloper ? (
+               <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                 <div className="flex items-center gap-4 text-blue-700 mb-3">
+                   <div className="bg-white p-2 rounded-lg shadow-sm"><Building size={24} /></div>
+                   <div><h3 className="font-bold">Developer Account Active</h3><p className="text-xs opacity-80">Manage your projects.</p></div>
+                 </div>
+                 <Link href="/developer-dashboard" className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors shadow-sm">
+                    Open Developer Console <ArrowRight size={16} />
+                 </Link>
+               </div>
+             ) : (
+               <button 
+                 onClick={handleRequestDeveloper}
+                 disabled={developerRequestStatus === 'pending' || devLoading || !currentUser}
+                 className="w-full flex items-center gap-4 text-left transition-all hover:bg-slate-50 disabled:opacity-70 disabled:cursor-not-allowed"
+               >
+                 <div className={`p-3 rounded-lg ${developerRequestStatus === 'pending' ? 'bg-yellow-50 text-yellow-600' : 'bg-blue-50 text-blue-600'}`}>
+                   {devLoading ? <Loader2 size={24} className="animate-spin" /> : <Building size={24} />}
+                 </div>
+                 <div className="flex-1">
+                   <h3 className="font-bold text-blue-700">{developerRequestStatus === 'pending' ? 'Developer Request Pending' : 'Join as Developer'}</h3>
+                   <p className="text-xs text-gray-400">{developerRequestStatus === 'pending' ? 'Waiting for admin approval...' : 'List new projects & developments'}</p>
                  </div>
                </button>
              )}

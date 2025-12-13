@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { 
   LayoutDashboard, 
   Plus, 
@@ -9,15 +9,15 @@ import {
   Loader2, 
   MapPin, 
   DollarSign, 
-  Image as ImageIcon,
-  X,
-  AlertTriangle,
-  UploadCloud,
-  Trash2,
-  Star,
-  Bed,
-  Bath,
-  Maximize,
+  Image as ImageIcon, 
+  X, 
+  AlertTriangle, 
+  UploadCloud, 
+  Trash2, 
+  Star, 
+  Bed, 
+  Bath, 
+  Maximize, 
   Calendar, 
   Gauge, 
   Fuel, 
@@ -35,19 +35,19 @@ import {
   Save, 
   Facebook, 
   Instagram, 
-  ParkingCircle,
-  FileText, // For IC
-  Globe, // For Website
-  Video, // For TikTok
-  BookOpen, // For XiaoHongShu
-  Clock // For Experience
+  ParkingCircle, 
+  FileText, 
+  Globe, 
+  Video, 
+  BookOpen, 
+  Clock 
 } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, updateDoc, addDoc, writeBatch } from "firebase/firestore";
 
-// ... (KEEP EXISTING CONSTANTS)
+// ... Constants ...
 const MALAYSIA_STATES = ["Johor", "Kedah", "Kelantan", "Melaka", "Negeri Sembilan", "Pahang", "Penang", "Perak", "Perlis", "Sabah", "Sarawak", "Selangor", "Terengganu", "Kuala Lumpur", "Labuan", "Putrajaya"];
 const PROPERTY_TYPES = ["Condominium", "Apartment", "Terrace House", "Bungalow", "Semi-D", "Commercial", "Land", "Townhouse", "Shop Lot", "Factory", "Office"];
 const PROPERTY_TENURE = ["Freehold", "Leasehold", "Malay Reserved"];
@@ -99,8 +99,9 @@ const ensureProtocol = (url: string) => {
     return `https://${url}`;
 };
 
-export default function AgentDashboard() {
+function AgentDashboardContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [db, setDb] = useState<any>(null);
@@ -116,8 +117,8 @@ export default function AgentDashboard() {
 
   // Agent Profile State
   const [agentProfile, setAgentProfile] = useState({
-      name: '', // Real Name
-      displayName: '', // Public Display Name
+      name: '',
+      displayName: '',
       email: '',
       phone: '',
       icNumber: '', 
@@ -159,6 +160,13 @@ export default function AgentDashboard() {
     transType: 'Sale', propertyType: 'Condominium', projectName: '', developer: '', tenure: 'Freehold', furnishing: 'Unfurnished', floorLevel: '', bedrooms: '', bathrooms: '', parking: '', size: '', facilities: [] as string[],
     condition: 'Used', make: 'Toyota', model: '', bodyType: 'Sedan', year: '', mileage: '', color: 'White', fuel: 'Petrol', transmission: 'Automatic', engineCapacity: '', seats: ''
   });
+
+  // Auto-open create modal if param present
+  useEffect(() => {
+    if (searchParams.get('action') === 'create') {
+        setIsCreating(true);
+    }
+  }, [searchParams]);
 
   const initializeFirebase = useCallback(async () => {
     try {
@@ -311,7 +319,6 @@ export default function AgentDashboard() {
       e.preventDefault();
       if (!db || !user) return;
 
-      // Validation
       if (!agentProfile.name) return alert("Please enter your Real Name.");
       if (!agentProfile.displayName) return alert("Please enter your Display Name.");
       if (!agentProfile.icNumber) return alert("IC Number is mandatory.");
@@ -336,23 +343,18 @@ export default function AgentDashboard() {
               xiaohongshu: ensureProtocol(agentProfile.xiaohongshu),
           };
 
-          // 1. Update User Doc
           await updateDoc(doc(db, "users", user.uid), {
               agentProfile: cleanProfile,
-              name: cleanProfile.name // Keep Real Name as main doc name for verification? Or Display Name?
-              // Usually main doc name is safer to be Real Name for admin verification, 
-              // but UI often uses main doc name. Let's keep name as Real Name.
+              name: cleanProfile.name 
           });
 
-          // 2. Batch Update all Listings for this Agent (Sync Name & Photo)
-          // Uses DISPLAY NAME for listings
           const batch = writeBatch(db);
           const q = query(collection(db, "listings"), where("agentId", "==", user.uid));
           const listingsSnap = await getDocs(q);
           
           listingsSnap.forEach((docSnap) => {
               batch.update(docSnap.ref, { 
-                  agentName: cleanProfile.displayName, // USE DISPLAY NAME
+                  agentName: cleanProfile.displayName, 
                   agentPhone: cleanProfile.phone,
                   agentPhoto: cleanProfile.photo || '' 
               });
@@ -361,7 +363,7 @@ export default function AgentDashboard() {
           await batch.commit();
 
           alert("Profile Saved & Listings Updated!");
-          setActiveTab('listings'); // Auto switch back
+          setActiveTab('listings'); 
       } catch (e) {
           console.error(e);
           alert("Save Failed.");
@@ -370,7 +372,6 @@ export default function AgentDashboard() {
       }
   };
 
-  // LISTING HANDLERS
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
@@ -460,7 +461,6 @@ export default function AgentDashboard() {
               ...formData,
               type: listingType,
               agentId: user.uid,
-              // Use Display Name for Listing
               agentName: agentProfile.displayName || agentProfile.name || user.name || 'Agent', 
               agentPhone: agentProfile.phone || '',
               agentPhoto: agentProfile.photo || '',
@@ -889,5 +889,13 @@ export default function AgentDashboard() {
             </div>
         )}
     </div>
+  );
+}
+
+export default function AgentDashboard() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50"><Loader2 className="animate-spin text-vexa-blue" size={40} /></div>}>
+      <AgentDashboardContent />
+    </Suspense>
   );
 }

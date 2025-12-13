@@ -18,7 +18,8 @@ import {
   ArrowRight, 
   User, 
   LayoutGrid, 
-  ChevronDown 
+  ChevronDown,
+  Building // Added for Project Icon
 } from "lucide-react";
 import Link from "next/link";
 import MobileNav from "@/components/layout/MobileNav";
@@ -234,7 +235,7 @@ function SearchContent() {
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-12 font-sans pt-36">
         
-        {/* Header Search Bar */}
+        {/* Header Search Bar - Fixed Below Main Header (top-16) */}
         <div className={`fixed top-16 left-0 right-0 bg-white border-b border-slate-200 px-4 py-4 z-40 shadow-sm transition-transform duration-300 ease-in-out ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[200%]'}`}>
             <form onSubmit={handleSearch} className="container mx-auto flex gap-3">
                 <div className="flex-1 relative">
@@ -257,7 +258,7 @@ function SearchContent() {
             </form>
         </div>
 
-        {/* Filters Drawer */}
+        {/* Filters Drawer - Fixed Below Search Bar (top-32 approx) */}
         {showFilters && (
             <div className={`fixed inset-x-0 top-[9rem] bg-white border-b border-slate-200 px-4 py-6 z-30 shadow-lg animate-in slide-in-from-top-2 max-h-[70vh] overflow-y-auto transition-transform duration-300 ease-in-out ${isHeaderVisible ? 'translate-y-0' : '-translate-y-[200%]'}`}>
                 <div className="container mx-auto space-y-6">
@@ -267,6 +268,7 @@ function SearchContent() {
                             <button onClick={() => setType('all')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all ${type === 'all' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>All</button>
                             <button onClick={() => setType('property')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-1 ${type === 'property' ? 'bg-white shadow-sm text-blue-600' : 'text-slate-500'}`}><Home size={14}/> Property</button>
                             <button onClick={() => setType('vehicle')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-1 ${type === 'vehicle' ? 'bg-white shadow-sm text-orange-600' : 'text-slate-500'}`}><Car size={14}/> Vehicle</button>
+                            <button onClick={() => setType('project')} className={`flex-1 py-2 text-sm font-medium rounded-md transition-all flex items-center justify-center gap-1 ${type === 'project' ? 'bg-white shadow-sm text-purple-600' : 'text-slate-500'}`}><Building size={14}/> Project</button>
                         </div>
                         {type === 'property' && (
                             <div className="flex gap-2">
@@ -344,29 +346,58 @@ function SearchContent() {
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
                         {listings.map(item => (
                             <Link href={`/listing/${item.id}`} key={item.id} className="bg-white rounded-xl shadow-sm hover:shadow-xl transition-all border border-slate-200 overflow-hidden group flex flex-col h-full">
+                                
+                                {/* Image Section */}
                                 <div className="aspect-[4/3] bg-slate-200 relative overflow-hidden">
                                     {item.coverImage ? (
                                         <img src={item.coverImage} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
                                     ) : (
                                         <div className="flex items-center justify-center h-full text-slate-400">No Image</div>
                                     )}
+                                    
+                                    {/* Badges */}
                                     <div className="absolute top-2 left-2 flex gap-1">
-                                        <span className={`text-[9px] font-bold px-2 py-1 rounded text-white uppercase shadow-sm ${item.type === 'property' ? 'bg-blue-600' : 'bg-orange-500'}`}>{item.type}</span>
-                                        {item.transType && (<span className="text-[9px] font-bold px-2 py-1 rounded bg-slate-800 text-white uppercase shadow-sm">{item.transType}</span>)}
+                                        <span className={`text-[9px] font-bold px-2 py-1 rounded text-white uppercase shadow-sm ${item.type === 'property' ? 'bg-blue-600' : item.type === 'project' ? 'bg-purple-600' : 'bg-orange-500'}`}>
+                                            {item.type}
+                                        </span>
+                                        {item.transType && (
+                                            <span className="text-[9px] font-bold px-2 py-1 rounded bg-slate-800 text-white uppercase shadow-sm">
+                                                {item.transType}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Price Tag */}
+                                    <div className="absolute bottom-2 left-2 right-2">
+                                        <div className="bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-sm">
+                                            <p className="text-vexa-blue font-extrabold text-sm md:text-base">RM {Number(item.price).toLocaleString()}</p>
+                                        </div>
                                     </div>
                                 </div>
+
+                                {/* Details Section */}
                                 <div className="p-3 md:p-4 flex-1 flex flex-col">
-                                    <div className="mb-2">
-                                        <h3 className="font-bold text-slate-900 text-xs md:text-sm line-clamp-1 group-hover:text-vexa-blue transition-colors">{item.title}</h3>
-                                        <p className="text-vexa-blue font-extrabold text-sm md:text-lg mt-0.5">RM {Number(item.price).toLocaleString()}</p>
+                                    <h3 className="font-bold text-slate-900 text-xs md:text-sm line-clamp-2 mb-2 leading-snug group-hover:text-vexa-blue transition-colors">
+                                        {item.title}
+                                    </h3>
+                                    
+                                    <div className="flex items-center gap-1 text-slate-500 text-[10px] md:text-xs mb-3">
+                                        <MapPin size={12} className="flex-shrink-0" /> 
+                                        <span className="truncate">{item.area}, {item.state}</span>
                                     </div>
-                                    <div className="flex items-center gap-1 text-slate-500 text-[10px] md:text-xs mb-3"><MapPin size={12} className="flex-shrink-0" /> <span className="truncate">{item.area}, {item.state}</span></div>
+                                    
+                                    {/* Features Grid */}
                                     <div className="mt-auto grid grid-cols-2 gap-1.5 pt-3 border-t border-slate-50">
                                         {item.type === 'property' ? (
                                             <>
                                                 <div className="flex items-center gap-1 text-[10px] text-slate-600 bg-slate-50 p-1 rounded justify-center"><Bed size={10} className="text-blue-500"/> {item.bedrooms} Bed</div>
                                                 <div className="flex items-center gap-1 text-[10px] text-slate-600 bg-slate-50 p-1 rounded justify-center"><Bath size={10} className="text-blue-500"/> {item.bathrooms} Bath</div>
                                                 <div className="col-span-2 flex items-center gap-1 text-[10px] text-slate-600 bg-slate-50 p-1 rounded justify-center"><Maximize size={10} className="text-blue-500"/> {item.size} sqft</div>
+                                            </>
+                                        ) : item.type === 'project' ? (
+                                            <>
+                                                 <div className="col-span-2 flex items-center gap-1 text-[10px] text-slate-600 bg-slate-50 p-1 rounded justify-center"><Calendar size={10} className="text-purple-500"/> {item.completionYear || 'Coming Soon'}</div>
+                                                 <div className="col-span-2 flex items-center gap-1 text-[10px] text-slate-600 bg-slate-50 p-1 rounded justify-center"><Home size={10} className="text-purple-500"/> {item.totalUnits ? `${item.totalUnits} Units` : 'Exclusive'}</div>
                                             </>
                                         ) : (
                                             <>
@@ -375,11 +406,15 @@ function SearchContent() {
                                             </>
                                         )}
                                     </div>
+
+                                    {/* Agent Footer */}
                                     <div className="mt-3 pt-2 border-t border-slate-100 flex items-center gap-2">
                                         <div className="w-5 h-5 bg-slate-100 rounded-full overflow-hidden flex-shrink-0">
                                             {item.agentPhoto ? <img src={item.agentPhoto} className="w-full h-full object-cover"/> : <User size={12} className="m-auto text-slate-400"/>}
                                         </div>
-                                        <span className="text-[10px] text-slate-500 truncate font-medium">{item.agentName || 'Agent'}</span>
+                                        <span className="text-[10px] text-slate-500 truncate font-medium">
+                                            {item.agentName || 'Agent'}
+                                        </span>
                                     </div>
                                 </div>
                             </Link>
