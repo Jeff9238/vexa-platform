@@ -104,7 +104,7 @@ export default function ListingDetail() {
           const docSnap = await getDoc(docRef);
           
           if (docSnap.exists()) {
-              const data = { id: docSnap.id, ...docSnap.data() };
+              const data = { id: docSnap.id, ...docSnap.data() } as any;
               setListing(data);
               
               let sortedImages = data.images || [];
